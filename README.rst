@@ -31,4 +31,10 @@ It should therefore work with all versions. Some models require `SciPy <http://w
 
 Example
 -------
+<<<<<<< HEAD
 Run `python CRFluxModels.py` from a shell to generate a set of standard plots.
+=======
+Run the module from a shell to generate a set of standard plots. 
+.. code:: bash
+      $ python CRFluxModels.py
+>>>>>>> branch 'master' of https://github.com/afedynitch/CRFluxModels.git
