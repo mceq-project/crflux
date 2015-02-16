@@ -239,23 +239,26 @@ class PrimaryFlux():
         """Returns tuple with proton fraction, proton flux and neutron flux.
         
         The proton fraction is defined as :math:`\\frac{\\Phi_p}{\\Phi_p + \\Phi_n}`. 
+        The calculation assumes that half of nuclear isotope consist of protons,
+        the other half of neutrons.
         
         Args:
           E (float): laboratory energy of nucleons in GeV
         Returns:
-          (float,float,float): proton excess, proton flux, neutron flux
+          (float,float,float): proton fraction, proton flux, neutron flux
         """
         nuc_flux = np.vectorize(self.nucleus_flux)
         za = self.Z_A
         p_flux = 0.0
-        # H
+        # protons
         p_flux += self.nucleus_flux(14, E)
 
         n_flux = 0.5 * sum([za(corsika_id)[1] ** 2.0 * nuc_flux(
             corsika_id, E * za(corsika_id)[1])
             for corsika_id in self.nucleus_ids if corsika_id != 14])
-
-        p_flux += n_flux
+        
+        # protons from other nuclei
+        p_flux += n_flux 
 
         return p_flux / (p_flux + n_flux), p_flux, n_flux
 
