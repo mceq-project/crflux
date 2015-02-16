@@ -18,7 +18,7 @@ easily obtain charge and mass from the ID and vice-versa (see
 :func:`PrimaryFlux.Z_A`).
 
 The physics of each model can be found following the reference
-in the doc strings.
+in the doc strings. 
 
 Example:
   An example can be run by executing the module::
