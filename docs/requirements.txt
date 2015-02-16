@@ -1,2 +1,8 @@
 sphinxcontrib-napoleon==0.2.8
 numpy==1.9.1
+numpy==1.9.1
+matplotlib==1.4.0
+numpy==1.9.1
+matplotlib==1.4.0
+numpy==1.9.1
+matplotlib==1.4.0
