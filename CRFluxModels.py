@@ -1,13 +1,17 @@
 '''
-:mod:`CRFluxModels` --- models of the high energy cosmic ray flux
+:mod:`CRFluxModels` --- models of the high-energy cosmic ray flux
 =================================================================
 
-This module is a collection of models of the primary cosmic ray flux,
-found in the literature of the last 30 years or so. The base class
+This module is a collection of models of the high-energy primary cosmic 
+ray flux, found in the literature of the last decades. The base class
 :class:`PrimaryFlux` contains various methods which can be used
-for all types of lepton flux calculations, such as semi-analytic,
-numerical and Monte Carlo. You might also want to use this module
-as a starting point for a new fitting project.   
+in all types of lepton flux calculations, such as semi-analytic,
+numerical or Monte Carlo methods. 
+
+.. note::
+    You might also consider using this module as a starting point 
+    for a new fitting project of the all-nucleon flux (with errors).
+    Let me know if you need data tables. 
 
 The numbering scheme for nuclei is adopted from the Cosmic Ray
 Air-Shower Monte Carlo `CORSIKA <https://web.ikp.kit.edu/corsika/>`_.
@@ -17,14 +21,83 @@ number and :math:`Z` the charge. Using this scheme one can
 easily obtain charge and mass from the ID and vice-versa (see
 :func:`PrimaryFlux.Z_A`).
 
-The physics of each model can be found following the reference
-in the doc strings.
+The physics of each model can be found following the references
+in this documentation.
+
+.. note::
+
+    As always, if you use this for your work, please cite the corresponding
+    publications.
 
 Example:
-  An example can be run by executing the module::
+  To generate the plots from below, just run::
 
       $ python CRFluxModels.py
       
+.. plot::
+
+    from matplotlib import pyplot as plt
+    from CRFluxModels import *
+    pmodels = [(GaisserStanevTilav, "3-gen", "GST 3-gen"),
+               (GaisserStanevTilav, "4-gen", "GST 4-gen"),
+               (CombinedGHandHG, "H3a", "cH3a"),
+               (CombinedGHandHG, "H4a", "cH4a"),
+               (HillasGaisser2012, "H3a", "H3a"),
+               (HillasGaisser2012, "H4a", "H4a"),
+               (PolyGonato, False, "poly-gonato"),
+               (Thunman, None, "TIG"),
+               (ZatsepinSokolskaya, 'default', 'ZS'),
+               (ZatsepinSokolskaya, 'pamela', 'ZSP'),
+               (GaisserHonda, None, 'GH')]
+
+    nfrac = {}
+    evec = np.logspace(0, 10, 1000)
+    plt.figure(figsize=(7.5,5))
+    plt.title('Cosmic ray nucleon flux (proton + neutron)')
+    for mclass, moptions, mtitle in pmodels:
+        pmod = mclass(moptions)
+        pfrac, p, n = pmod.p_and_n_flux(evec)
+        plt.plot(evec, (p + n) * evec ** 2.5, ls='-', lw=1.5, label=mtitle)
+        nfrac[mtitle] = (1 - pfrac)
+
+    plt.loglog()
+    plt.xlabel(r"$E_{nucleon}$ [GeV]")
+    plt.ylabel(r"dN/dE (E/GeV)$^{2.5}$ (m$^{2}$ s sr GeV)$^{-1}$")
+    plt.legend(loc=0, frameon=False, numpoints=1, ncol=2)
+    plt.xlim([1, 1e10])
+    plt.ylim([10, 2e4])
+    plt.tight_layout()
+    
+
+    plt.figure(figsize=(7.5,5))
+    plt.title('Cosmic ray particle flux (all-nuclei).')
+    
+    for mclass, moptions, mtitle in pmodels:
+        pmod = mclass(moptions)
+
+        flux = pmod.total_flux(evec)
+        plt.plot(evec, flux * evec ** 2.5, ls='-', lw=1.5, label=mtitle)
+
+    plt.loglog()
+    plt.xlabel(r"$E_{particle}$ [GeV]")
+    plt.ylabel(r"dN/dE (E/GeV)$^{2.5}$ (m$^{2}$ s sr GeV)$^{-1}$")
+    plt.legend(loc=0, frameon=False, numpoints=1, ncol=2)
+    plt.xlim([1, 1e10])
+    plt.ylim([10, 2e4])
+    plt.tight_layout()
+
+    plt.figure(figsize=(7.5,5))
+    plt.title('Fraction of neutrons relative to protons.')
+    for mclass, moptions, mtitle in pmodels:
+        plt.plot(evec, nfrac[mtitle], ls='-', lw=1.5, label=mtitle)
+
+    plt.semilogx()
+    plt.xlabel(r"$E_{nucleon}$ [GeV]")
+    plt.ylabel("Neutron fraction")
+    plt.legend(loc=0, frameon=False, numpoints=1, ncol=2)
+    plt.xlim([1, 1e10])
+    plt.tight_layout()
+    plt.show()
 '''
 import numpy as np
 from abc import ABCMeta, abstractmethod
@@ -737,12 +810,12 @@ if __name__ == '__main__':
                (Thunman, None, "TIG"),
                (ZatsepinSokolskaya, 'default', 'ZS'),
                (ZatsepinSokolskaya, 'pamela', 'ZSP'),
-               (_BenzviMontaruli, None, 'BM'),
                (GaisserHonda, None, 'GH')]
 
     nfrac = {}
     evec = np.logspace(0, 10, 1000)
-    plt.figure()
+    plt.figure(figsize=(7.5,5))
+    plt.title('Cosmic ray nucleon flux (proton + neutron)')
     for mclass, moptions, mtitle in pmodels:
         pmod = mclass(moptions)
         pfrac, p, n = pmod.p_and_n_flux(evec)
@@ -752,11 +825,15 @@ if __name__ == '__main__':
     plt.loglog()
     plt.xlabel(r"$E_{nucleon}$ [GeV]")
     plt.ylabel(r"dN/dE (E/GeV)$^{2.5}$ (m$^{2}$ s sr GeV)$^{-1}$")
-    plt.legend(loc=0, frameon=False, numpoints=1)
+    plt.legend(loc=0, frameon=False, numpoints=1, ncol=2)
     plt.xlim([1, 1e10])
     plt.ylim([10, 2e4])
+    plt.tight_layout()
+    
 
-    plt.figure()
+    plt.figure(figsize=(7.5,5))
+    plt.title('Cosmic ray particle flux (all-nuclei).')
+    
     for mclass, moptions, mtitle in pmodels:
         pmod = mclass(moptions)
 
@@ -766,18 +843,20 @@ if __name__ == '__main__':
     plt.loglog()
     plt.xlabel(r"$E_{particle}$ [GeV]")
     plt.ylabel(r"dN/dE (E/GeV)$^{2.5}$ (m$^{2}$ s sr GeV)$^{-1}$")
-    plt.legend(loc=0, frameon=False, numpoints=1)
+    plt.legend(loc=0, frameon=False, numpoints=1, ncol=2)
     plt.xlim([1, 1e10])
     plt.ylim([10, 2e4])
+    plt.tight_layout()
 
-    plt.figure()
+    plt.figure(figsize=(7.5,5))
+    plt.title('Fraction of neutrons relative to protons.')
     for mclass, moptions, mtitle in pmodels:
         plt.plot(evec, nfrac[mtitle], ls='-', lw=1.5, label=mtitle)
 
     plt.semilogx()
     plt.xlabel(r"$E_{nucleon}$ [GeV]")
     plt.ylabel("Neutron fraction")
-    plt.legend(loc=0, frameon=False, numpoints=1)
+    plt.legend(loc=0, frameon=False, numpoints=1, ncol=2)
     plt.xlim([1, 1e10])
-
+    plt.tight_layout()
     plt.show()
