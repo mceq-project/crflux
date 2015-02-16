@@ -1,5 +1,5 @@
 `CRFluxModels` --- models of the high-energy cosmic ray flux
---------------------------------------------------------------
+------------------------------------------------------------
 
 Historically, this module was part of the research code for a paper 
 `A. Fedynitch, J. Becker Tjus, and P. Desiati, Phys. Rev. D 86, 114024 
@@ -20,11 +20,17 @@ something, feel free to send a pull request or just branch/fork and let me know.
 Documentation
 -------------
 
-Please follow `this link to the documentation <http://crfluxmodels.readthedocs.org/en/latest/index.html#>`.
+Please follow `this link to the documentation <http://crfluxmodels.readthedocs.org/en/latest/index.html#>`_.
 
 Installation
 ------------
 
 The module was developed using 
-`Python2.7 <http://python.org>` and `NumPy <http://www.numpy.org>`_. It doesn't use any kind of fancy functionality.
-It should therefore work with all versions. Some models require `SciPy <http://www.scipy.org>`.
+`Python2.7 <http://python.org>`_ and `NumPy <http://www.numpy.org>`_. It doesn't use any kind of fancy functionality.
+It should therefore work with all versions. Some models require `SciPy <http://www.scipy.org>`_.
+
+Example
+-------
+Run the module from a shell to generate a set of standard plots. 
+.. highlight:: py
+      $ python CRFluxModels.py
