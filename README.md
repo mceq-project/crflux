@@ -1,9 +1,9 @@
 `CRFluxModels` --- models of the high-energy cosmic ray flux
-============================================================
+--------------------------------------------------------------
 
 Historically, this module was part of the research code for a paper 
 `A. Fedynitch, J. Becker Tjus, and P. Desiati, Phys. Rev. D 86, 114024 
-(2012) <http://journals.aps.org/prd/abstract/10.1103/PhysRevD.86.114024>`, 
+(2012) <http://journals.aps.org/prd/abstract/10.1103/PhysRevD.86.114024>`_, 
 where we compared the effects of different primary Cosmic Ray Flux models - therefore
 the name. Later the module became an integral part of my research tools and has been
 recently cleaned up and documented. It
