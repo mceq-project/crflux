@@ -40,8 +40,6 @@ Example:
     from CRFluxModels import *
     pmodels = [(GaisserStanevTilav, "3-gen", "GST 3-gen"),
                (GaisserStanevTilav, "4-gen", "GST 4-gen"),
-               (CombinedGHandHG, "H3a", "cH3a"),
-               (CombinedGHandHG, "H4a", "cH4a"),
                (HillasGaisser2012, "H3a", "H3a"),
                (HillasGaisser2012, "H4a", "H4a"),
                (PolyGonato, False, "poly-gonato"),
