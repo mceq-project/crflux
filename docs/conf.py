@@ -16,7 +16,7 @@ import sys
 import os
 import mock
  
-MOCK_MODULES = ['numpy', 'scipy','scipy.optimize']
+MOCK_MODULES = ['scipy','scipy.optimize']
 for mod_name in MOCK_MODULES: 
     sys.modules[mod_name] = mock.Mock()
 
@@ -38,7 +38,7 @@ extensions = [
     'sphinx.ext.coverage',
     'sphinx.ext.pngmath',
     'sphinx.ext.viewcode',
-    'matplotlib.sphinxext.plot_directive',  
+    'matplotlib.sphinxext.plot_directive',
     'sphinxcontrib.napoleon'
 ]
 

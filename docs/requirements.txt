@@ -1,3 +1,2 @@
-sphinxcontrib-napoleon==0.2.8
-numpy
+sphinxcontrib-napoleon>=0.1.0
 matplotlib
