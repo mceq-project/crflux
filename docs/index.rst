@@ -3,8 +3,8 @@
    You can adapt this file completely to your liking, but it should at least
    contain the root `toctree` directive.
 
-Documentation for the :mod:`CRFluxModels`
-=========================================
+Documentation for :mod:`CRFluxModels`
+=====================================
 
 Historically, this module was part of the research code for a paper 
 `A. Fedynitch, J. Becker Tjus, and P. Desiati, Phys. Rev. D 86, 114024 
