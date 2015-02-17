@@ -16,7 +16,7 @@ import sys
 import os
 import mock
  
-MOCK_MODULES = ['scipy','scipy.optimize']
+MOCK_MODULES = ['scipy','scipy.optimize','numba','numbapro']
 for mod_name in MOCK_MODULES: 
     sys.modules[mod_name] = mock.Mock()
 

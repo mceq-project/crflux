@@ -16,6 +16,8 @@ Since this module never was a performance bottle-neck, the formulae are written 
 awy without any attempt to optimize for speed or elegance. If you find it slow and improve
 something, feel free to send a pull request or just branch/fork and let me know.
 
+The module is used as a submodule in the `Matrix Cascade Equation <https://github.com/afedynitch/MCEq>`_ 
+app.
 
 Documentation
 -------------
