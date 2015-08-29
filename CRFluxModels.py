@@ -122,11 +122,6 @@ class PrimaryFlux():
     
     __metaclass__ = ABCMeta
     
-    # : Full model name 
-    name = None
-    # : Short/abbreviated model name
-    sname = None
-    
     @abstractmethod
     def nucleus_flux(self, corsika_id, E):
         """Returns the flux of nuclei corresponding to
