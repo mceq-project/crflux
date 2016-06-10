@@ -13,7 +13,7 @@ numerical or Monte Carlo methods.
     for a new fitting project of the all-nucleon flux (with errors).
     Let me know if you need data tables.
 
-The numbering scheme for nuclei is adopted from the Cosmic Ray
+The numbering scheme for nuclei is adapted from the Cosmic Ray
 Air-Shower Monte Carlo `CORSIKA <https://web.ikp.kit.edu/corsika/>`_.
 Protons have the ID 14. The ID for nuclei is composed using the
 formula :math:`ID=100 \\cdot A + Z`, where :math:`A` is the mass
@@ -224,8 +224,8 @@ class PrimaryFlux():
         p_0 += 14.**2 * self.nucleus_flux(2814, E * 28.)
         n_0 += 14.**2 * self.nucleus_flux(2814, E * 28.)
 
-        p_0 += 26.**2 * self.nucleus_flux(5226, E * 52.)
-        n_0 += 26.**2 * self.nucleus_flux(5226, E * 52.)
+        p_0 += 26.**2 * self.nucleus_flux(5426, E * 52.)
+        n_0 += 26.**2 * self.nucleus_flux(5426, E * 52.)
 
         return (p_0 - n_0) / (p_0 + n_0)
 
@@ -330,7 +330,7 @@ class PolyGonato(PrimaryFlux):
         self.params[2613] = (1.15e-3, 2.66, 13)  # Al
         self.params[2814] = (7.96e-3, 2.75, 14)  # Si
         self.params[5025] = (1.35e-3, 2.46, 25)  # Mn
-        self.params[5226] = (2.04e-2, 2.59, 26)  # Fe
+        self.params[5426] = (2.04e-2, 2.59, 26)  # Fe
         self.params[5427] = (7.51e-5, 2.72, 27)  # Co
 
         self.nucleus_ids = self.params.keys()
@@ -367,7 +367,7 @@ class _BenzviMontaruli(PrimaryFlux):
         self.params[1608] = (320.0, 3.828e-5, -2.741, 3200.0, -2.503)  # O
         self.params[2412] = (400.0, 4.458e-5, -2.741, 4800.0, -2.503)  # Mg
         self.params[2814] = (560.0, 4.314e-5, -2.741, 5600.0, -2.503)  # Si
-        self.params[5226] = (
+        self.params[5426] = (
             1120.0, 1.659e-5, -2.741, 11200.0, -2.503)  # Fe
 
         self.nucleus_ids = self.params.keys()
@@ -414,7 +414,7 @@ class HillasGaisser2012(PrimaryFlux):
         self.params = {}
         self.rid_cutoff = {}
 
-        mass_comp = [14, 402, 1206, 2814, 5226]
+        mass_comp = [14, 402, 1206, 2814, 5426]
         for mcomp in mass_comp:
             self.params[mcomp] = {}
 
@@ -425,13 +425,13 @@ class HillasGaisser2012(PrimaryFlux):
         self.params[402][1] = (3550, 1.58, 2)  # He
         self.params[1206][1] = (2200, 1.63, 6)  # CNO
         self.params[2814][1] = (1430, 1.67, 14)  # MgAlSi
-        self.params[5226][1] = (2120, 1.63, 26)  # Fe
+        self.params[5426][1] = (2120, 1.63, 26)  # Fe
 
         self.params[14][2] = (20, 1.4, 1)  # H
         self.params[402][2] = (20, 1.4, 2)  # He
         self.params[1206][2] = (13.4, 1.4, 6)  # CNO
         self.params[2814][2] = (13.4, 1.4, 14)  # MgAlSi
-        self.params[5226][2] = (13.4, 1.4, 26)  # Fe
+        self.params[5426][2] = (13.4, 1.4, 26)  # Fe
 
         if self.model == "H3a":
             self.rid_cutoff[3] = 2e9
@@ -439,14 +439,14 @@ class HillasGaisser2012(PrimaryFlux):
             self.params[402][3] = (1.7, 1.4, 2)  # He
             self.params[1206][3] = (1.14, 1.4, 6)  # CNO
             self.params[2814][3] = (1.14, 1.4, 14)  # MgAlSi
-            self.params[5226][3] = (1.14, 1.4, 26)  # Fe
+            self.params[5426][3] = (1.14, 1.4, 26)  # Fe
         elif self.model == "H4a":
             self.rid_cutoff[3] = 60e9
             self.params[14][3] = (200., 1.6, 1)  # H
             self.params[402][3] = (0, 1.4, 2)  # He
             self.params[1206][3] = (0, 1.4, 6)  # CNO
             self.params[2814][3] = (0, 1.4, 14)  # MgAlSi
-            self.params[5226][3] = (0, 1.4, 26)  # Fe
+            self.params[5426][3] = (0, 1.4, 26)  # Fe
         else:
             raise Exception(
                 'HillasGaisser2012(): Unknown model version requested.')
@@ -463,6 +463,40 @@ class HillasGaisser2012(PrimaryFlux):
                 np.exp(-E / p[2] / self.rid_cutoff[i])
         return flux
 
+
+class H3a_polygonato(HillasGaisser2012):
+
+    """Modified version of Gaisser, T.K., Astroparticle 
+    Physics 35, 801 (2012).
+
+    Model is based on Hillas ideas and eye-ball fits by T.K. Gaisser.
+    H3a is a 3-'peters cycle' 5 mass group model with mixed
+    composition above the ankle. H4a has protons only in the
+    3. component.
+
+    This version has a five component poly-gonato at lower energies
+    and resembles H3/4a at energies above the knee.
+
+    Args:
+      model (str): can be either H3a or H4a.
+    """
+    def __init__(self, model="H3a"):
+        HillasGaisser2012.__init__(self, model)
+        self.rid_cutoff[1] = 4.49e6
+        self.rid_cutoff[2] = 30e6
+        self.rid_cutoff[3] = 2e9
+        self.params[14][1] = (11800, 1.71, 1)  # H
+        self.params[402][1] = (4750, 1.64, 2)  # He
+        self.params[1206][1] = (3860, 1.67, 6)  # CNO
+        self.params[2814][1] = (3120, 1.70, 14)  # MgAlSi
+        self.params[5426][1] = (1080, 1.55, 26)  # Fe
+
+        self.params[14][2] = (11.8, 1.4, 1)  # H
+        self.params[402][2] = (11.8, 1.4, 2)  # He
+        self.params[1206][2] = (7.88, 1.4, 6)  # CNO
+        self.params[2814][2] = (7.88, 1.4, 14)  # MgAlSi
+        self.params[5426][2] = (7.88, 1.4, 26)  # Fe
+        
 
 class GaisserStanevTilav(PrimaryFlux):
 
@@ -487,7 +521,7 @@ class GaisserStanevTilav(PrimaryFlux):
         self.rid_cutoff[1] = 120e3
         self.rid_cutoff[2] = 4e6
 
-        mass_comp = [14, 402, 1206, 1608, 5226]
+        mass_comp = [14, 402, 1206, 1608, 5426]
         for mcomp in mass_comp:
             self.params[mcomp] = {}
 
@@ -495,7 +529,7 @@ class GaisserStanevTilav(PrimaryFlux):
         self.params[402][1] = (3200, 1.58, 2)  # He
         self.params[1206][1] = (100, 1.4, 6)  # C
         self.params[1608][1] = (130, 1.4, 8)  # O
-        self.params[5226][1] = (60, 1.3, 26)  # Fe
+        self.params[5426][1] = (60, 1.3, 26)  # Fe
 
         self.params[14][2] = (150, 1.4, 1)  # H
         self.params[402][2] = (65, 1.3, 2)  # He
@@ -503,31 +537,31 @@ class GaisserStanevTilav(PrimaryFlux):
         self.params[1608][2] = (7, 1.3, 8)  # O
 
         if self.model == "3-gen":
-            self.params[5226][2] = (2.3, 1.2, 26)  # Fe
+            self.params[5426][2] = (2.3, 1.2, 26)  # Fe
             self.rid_cutoff[3] = 1.3e9
 
             self.params[14][3] = (14, 1.4, 1)  # H
             self.params[402][3] = (0, 1.4, 2)  # He
             self.params[1206][3] = (0, 1.4, 6)  # CNO
             self.params[1608][3] = (0, 1.3, 8)  # O
-            self.params[5226][3] = (0.025, 1.2, 26)  # Fe
+            self.params[5426][3] = (0.025, 1.2, 26)  # Fe
 
         elif self.model == "4-gen":
-            self.params[5226][2] = (2.1, 1.2, 26)  # Fe
+            self.params[5426][2] = (2.1, 1.2, 26)  # Fe
 
             self.rid_cutoff[3] = 1.5e9
             self.params[14][3] = (12., 1.4, 1)  # H
             self.params[402][3] = (0, 1.4, 2)  # He
             self.params[1206][3] = (0, 1.4, 6)  # CNO
             self.params[1608][3] = (0, 1.3, 8)  # O
-            self.params[5226][3] = (0.011, 1.2, 26)  # Fe
+            self.params[5426][3] = (0.011, 1.2, 26)  # Fe
 
             self.rid_cutoff[4] = 40e9
             self.params[14][4] = (1.2, 1.4, 1)  # H
             self.params[402][4] = (0, 0, 2)  # He
             self.params[1206][4] = (0, 0, 6)  # CNO
             self.params[1608][4] = (0, 0, 8)  # O
-            self.params[5226][4] = (0, 0, 26)  # Fe
+            self.params[5426][4] = (0, 0, 26)  # Fe
         else:
             raise Exception(
                 'GaisserStanevTilav(): Unknown model version.')
@@ -571,7 +605,7 @@ class CombinedGHandHG(PrimaryFlux):
         self.leModel = GaisserHonda()
         self.heModel = HillasGaisser2012(model)
         self.heCutOff = 1e5
-        cid_list = [14, 402, 1206, 2814, 5226]
+        cid_list = [14, 402, 1206, 2814, 5426]
 
         # Store low- to high-energy model transitions in params
         for cid in cid_list:
@@ -636,7 +670,7 @@ class ZatsepinSokolskaya(PrimaryFlux):
             self.f_norm[402] = (9.5e3, 8.5e3, 0.74, 18., 2)
             self.f_norm[1206] = (6.75e3, 1.8e3, 30, 5.8, 7)
             self.f_norm[2814] = (5.5e3, 1.5e3, 110, 3.5, 12)
-            self.f_norm[5226] = (3.5e3, 1.2e3, 750, 2.4, 20)
+            self.f_norm[5426] = (3.5e3, 1.2e3, 750, 2.4, 20)
             self.m_p = 0.983
         elif model == 'default':
             self.name = 'Zatsepin-Sokolskaya'
@@ -651,7 +685,7 @@ class ZatsepinSokolskaya(PrimaryFlux):
             self.f_norm[402] = (8.75e3, 8.5e3, 3.0, 18., 2)
             self.f_norm[1206] = (6.75e3, 1.8e3, 30, 5.8, 7)
             self.f_norm[2814] = (5.5e3, 1.5e3, 110, 3.5, 12)
-            self.f_norm[5226] = (3.5e3, 1.2e3, 750, 2.4, 20)
+            self.f_norm[5426] = (3.5e3, 1.2e3, 750, 2.4, 20)
             self.m_p = 0.983
         else:
             raise Exception("{0}():: Unknown model selection '{1}'.".format(
@@ -738,7 +772,7 @@ class GaisserHonda(PrimaryFlux):
         self.params[402] = (2.64, 600, 1.25, 0.14)
         self.params[1206] = (2.60, 33.2, 0.97, 0.01)
         self.params[2814] = (2.79 + 0.08, 34.2 - 6.0, 2.14, 0.01)
-        self.params[5226] = (2.68, 4.45, 3.07, 0.41)
+        self.params[5426] = (2.68, 4.45, 3.07, 0.41)
         self.nucleus_ids = self.params.keys()
 
     def nucleus_flux(self, corsika_id, E):
