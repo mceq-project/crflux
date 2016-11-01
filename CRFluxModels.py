@@ -233,8 +233,6 @@ class PrimaryFlux():
         """Returns tuple with proton fraction, proton flux and neutron flux.
 
         The proton fraction is defined as :math:`\\frac{\\Phi_p}{\\Phi_p + \\Phi_n}`.
-        The calculation assumes that half of nuclear isotope consist of protons,
-        the other half of neutrons.
 
         Args:
           E (float): laboratory energy of nucleons in GeV
@@ -243,18 +241,33 @@ class PrimaryFlux():
         """
         nuc_flux = np.vectorize(self.nucleus_flux)
         za = self.Z_A
-        p_flux = 0.0
-        # protons
-        p_flux += self.nucleus_flux(14, E)
 
-        n_flux = 0.5 * sum([za(corsika_id)[1] ** 2.0 * nuc_flux(
-            corsika_id, E * za(corsika_id)[1])
-            for corsika_id in self.nucleus_ids if corsika_id != 14])
+        p_flux = sum([za(corsika_id)[0] ** 2.0 *
+            nuc_flux(corsika_id, E * za(corsika_id)[1]) 
+            for corsika_id in self.nucleus_ids])
 
-        # protons from other nuclei
-        p_flux += n_flux
+        n_flux = sum([(za(corsika_id)[1] - za(corsika_id)[0]) ** 2.0 *
+            nuc_flux(corsika_id, E * za(corsika_id)[1])
+            for corsika_id in self.nucleus_ids])
 
         return p_flux / (p_flux + n_flux), p_flux, n_flux
+
+
+    def lnA(self, E):
+        """Returns mean logarithmic mass <ln A>/
+
+        Args:
+          E (float): laboratory energy of particles in GeV
+        Returns:
+          (float): mean (natural) logarithmic mass
+        """
+        sum_weight = 0.
+
+        for cid in self.nucleus_ids:
+            if cid == 14: continue #p has lnA = 0
+            sum_weight += np.log(self.Z_A(cid)[1]) * self.nucleus_flux(cid, E)
+
+        return sum_weight / self.total_flux(E)
 
     def _find_nearby_id(self, corsika_id, delta_A=3):
         """Looks in :attr:`self.params` for a nucleus with same ``corsika_id`` and returns
@@ -855,6 +868,7 @@ if __name__ == '__main__':
                (GaisserHonda, None, 'GH')]
 
     nfrac = {}
+    lnA = {}
     evec = np.logspace(0, 10, 1000)
     plt.figure(figsize=(7.5, 5))
     plt.title('Cosmic ray nucleon flux (proton + neutron)')
@@ -863,6 +877,7 @@ if __name__ == '__main__':
         pfrac, p, n = pmod.p_and_n_flux(evec)
         plt.plot(evec, (p + n) * evec ** 2.5, ls='-', lw=1.5, label=mtitle)
         nfrac[mtitle] = (1 - pfrac)
+        lnA[mtitle] = pmod.lnA(evec)
 
     plt.loglog()
     plt.xlabel(r"$E_{nucleon}$ [GeV]")
@@ -900,4 +915,17 @@ if __name__ == '__main__':
     plt.legend(loc=0, frameon=False, numpoints=1, ncol=2)
     plt.xlim([1, 1e10])
     plt.tight_layout()
+
+    plt.figure(figsize=(7.5, 5))
+    plt.title('Mean log mass <lnA>.')
+    for mclass, moptions, mtitle in pmodels:
+        plt.plot(evec, lnA[mtitle], ls='-', lw=1.5, label=mtitle)
+
+    plt.semilogx()
+    plt.xlabel(r"$E_{particle}$ [GeV]")
+    plt.ylabel("$<\ln{A}>$")
+    plt.legend(loc=0, frameon=False, numpoints=1, ncol=2)
+    plt.xlim([1, 1e10])
+    plt.tight_layout()
+
     plt.show()
