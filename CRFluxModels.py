@@ -295,7 +295,7 @@ class PrimaryFlux():
             raise Exception(
                 e.format(self.__class__.__name__, delta_A, A_in, A_close))
         else:
-            return A_close
+            return closest_id
 
     def Z_A(self, corsika_id):
         """Returns mass number :math:`A` and charge :math:`Z` corresponding
@@ -351,9 +351,9 @@ class PolyGonato(PrimaryFlux):
     def nucleus_flux(self, corsika_id, E):
         corsika_id = self._find_nearby_id(corsika_id)
 
-        return self.PolyGonatoFormula(corsika_id, E)
+        return self._polygonato_fomula(corsika_id, E)
 
-    def PolyGonatoFormula(self, corsika_id, E):
+    def _polygonato_fomula(self, corsika_id, E):
         p = self.params[corsika_id]
         gam = (self.gamma_c + p[1]) if self.constdelta else -self.delta_gamma
 
