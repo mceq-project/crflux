@@ -242,13 +242,14 @@ class PrimaryFlux():
         nuc_flux = np.vectorize(self.nucleus_flux)
         za = self.Z_A
 
-        p_flux = sum([za(corsika_id)[0] ** 2.0 *
+        p_flux = sum([za(corsika_id)[0] * za(corsika_id)[1] *
             nuc_flux(corsika_id, E * za(corsika_id)[1]) 
             for corsika_id in self.nucleus_ids])
 
-        n_flux = sum([(za(corsika_id)[1] - za(corsika_id)[0]) ** 2.0 *
-            nuc_flux(corsika_id, E * za(corsika_id)[1])
+        n_flux = sum([(za(corsika_id)[1] - za(corsika_id)[0]) * 
+            za(corsika_id)[1] * nuc_flux(corsika_id, E * za(corsika_id)[1])
             for corsika_id in self.nucleus_ids])
+
 
         return p_flux / (p_flux + n_flux), p_flux, n_flux
 
