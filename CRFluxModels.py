@@ -213,19 +213,20 @@ class PrimaryFlux():
         p_0 = 0.0
         n_0 = 0.0
 
-        p_0 += self.nucleus_flux(14, E)
+        nuc_flux = np.vectorize(self.nucleus_flux)
+        p_0 += nuc_flux(14, E)
 
-        p_0 += 2.**2 * self.nucleus_flux(402, E * 4.)
-        n_0 += 2.**2 * self.nucleus_flux(402, E * 4.)
+        p_0 += 2.**2 * nuc_flux(402, E * 4.)
+        n_0 += 2.**2 * nuc_flux(402, E * 4.)
 
-        p_0 += 6.**2 * self.nucleus_flux(1206, E * 12.)
-        n_0 += 6.**2 * self.nucleus_flux(1206, E * 12.)
+        p_0 += 6.**2 * nuc_flux(1206, E * 12.)
+        n_0 += 6.**2 * nuc_flux(1206, E * 12.)
 
-        p_0 += 14.**2 * self.nucleus_flux(2814, E * 28.)
-        n_0 += 14.**2 * self.nucleus_flux(2814, E * 28.)
+        p_0 += 14.**2 * nuc_flux(2814, E * 28.)
+        n_0 += 14.**2 * nuc_flux(2814, E * 28.)
 
-        p_0 += 26.**2 * self.nucleus_flux(5426, E * 52.)
-        n_0 += 26.**2 * self.nucleus_flux(5426, E * 52.)
+        p_0 += 26.**2 * nuc_flux(5426, E * 52.)
+        n_0 += 26.**2 * nuc_flux(5426, E * 52.)
 
         return (p_0 - n_0) / (p_0 + n_0)
 
@@ -264,9 +265,10 @@ class PrimaryFlux():
         """
         sum_weight = 0.
 
+        nuc_flux = np.vectorize(self.nucleus_flux)
         for cid in self.nucleus_ids:
             if cid == 14: continue #p has lnA = 0
-            sum_weight += np.log(self.Z_A(cid)[1]) * self.nucleus_flux(cid, E)
+            sum_weight += np.log(self.Z_A(cid)[1]) * nuc_flux(cid, E)
 
         return sum_weight / self.total_flux(E)
 
@@ -853,30 +855,55 @@ class SimplePowerlaw27(PrimaryFlux):
         return self.params[0] * E ** (self.params[1])
 
 
+class GlobalSplineFit(PrimaryFlux):
+
+    """Data-driven fit of direct and indirect measurements of the
+    cosmic ray flux and composition. Tracks the mass composition using
+    four leading elements (p, He, O, Fe), whose flux is modeled by shaped
+    spline functions. Assumes fixed flux ratios in rigidity for the flux
+    of subleading elements. Covers the whole rigidity range from
+    10 GV to 10^11 GeV.
+    """
+
+    name = "Dembinski et al. (2017)"
+    sname = "GSF"
+
+    def __init__(self, opt=None):
+        from gsf.flux import z_to_a
+        self.nucleus_ids = [a * 100 + z for (z, a) in z_to_a.items()]
+
+    def nucleus_flux(self, corsika_id, E):
+        from gsf.flux import eflux
+        z, a = self.Z_A(corsika_id)
+        if E < 1e2: return np.nan
+        return eflux(z, E)
+
+
 if __name__ == '__main__':
 
     from matplotlib import pyplot as plt
-    pmodels = [(GaisserStanevTilav, "3-gen", "GST 3-gen"),
-               (GaisserStanevTilav, "4-gen", "GST 4-gen"),
-               (CombinedGHandHG, "H3a", "cH3a"),
-               (CombinedGHandHG, "H4a", "cH4a"),
-               (HillasGaisser2012, "H3a", "H3a"),
-               (HillasGaisser2012, "H4a", "H4a"),
-               (PolyGonato, False, "poly-gonato"),
-               (Thunman, None, "TIG"),
-               (ZatsepinSokolskaya, 'default', 'ZS'),
-               (ZatsepinSokolskaya, 'pamela', 'ZSP'),
-               (GaisserHonda, None, 'GH')]
+    pmodels = [(GaisserStanevTilav, "3-gen", "GST 3-gen", "b", "--"),
+               (GaisserStanevTilav, "4-gen", "GST 4-gen", "b", "-"),
+               (CombinedGHandHG, "H3a", "cH3a", "g", "--"),
+               (CombinedGHandHG, "H4a", "cH4a", "g", "-"),
+               (HillasGaisser2012, "H3a", "H3a", "r", "--"),
+               (HillasGaisser2012, "H4a", "H4a", "r", "-"),
+               (PolyGonato, False, "poly-gonato", "m", "-"),
+               (Thunman, None, "TIG", "y", "-"),
+               (ZatsepinSokolskaya, 'default', 'ZS', "c", "-"),
+               (ZatsepinSokolskaya, 'pamela', 'ZSP', "c", "--"),
+               (GaisserHonda, None, 'GH', "0.5", "-"),
+               (GlobalSplineFit, None, 'GSF', "k", "-")]
 
     nfrac = {}
     lnA = {}
-    evec = np.logspace(0, 10, 1000)
+    evec = np.logspace(0, 11, 1000)
     plt.figure(figsize=(7.5, 5))
     plt.title('Cosmic ray nucleon flux (proton + neutron)')
-    for mclass, moptions, mtitle in pmodels:
+    for mclass, moptions, mtitle, color, ls in pmodels:
         pmod = mclass(moptions)
         pfrac, p, n = pmod.p_and_n_flux(evec)
-        plt.plot(evec, (p + n) * evec ** 2.5, ls='-', lw=1.5, label=mtitle)
+        plt.plot(evec, (p + n) * evec ** 2.5, color=color, ls=ls, lw=1.5, label=mtitle)
         nfrac[mtitle] = (1 - pfrac)
         lnA[mtitle] = pmod.lnA(evec)
 
@@ -884,49 +911,49 @@ if __name__ == '__main__':
     plt.xlabel(r"$E_{nucleon}$ [GeV]")
     plt.ylabel(r"dN/dE (E/GeV)$^{2.5}$ (m$^{2}$ s sr GeV)$^{-1}$")
     plt.legend(loc=0, frameon=False, numpoints=1, ncol=2)
-    plt.xlim([1, 1e10])
+    plt.xlim([1, 1e11])
     plt.ylim([10, 2e4])
     plt.tight_layout()
 
     plt.figure(figsize=(7.5, 5))
     plt.title('Cosmic ray particle flux (all-nuclei).')
 
-    for mclass, moptions, mtitle in pmodels:
+    for mclass, moptions, mtitle, color, ls in pmodels:
         pmod = mclass(moptions)
 
         flux = pmod.total_flux(evec)
-        plt.plot(evec, flux * evec ** 2.5, ls='-', lw=1.5, label=mtitle)
+        plt.plot(evec, flux * evec ** 2.5, color=color, ls=ls, lw=1.5, label=mtitle)
 
     plt.loglog()
     plt.xlabel(r"$E_{particle}$ [GeV]")
     plt.ylabel(r"dN/dE (E/GeV)$^{2.5}$ (m$^{2}$ s sr GeV)$^{-1}$")
     plt.legend(loc=0, frameon=False, numpoints=1, ncol=2)
-    plt.xlim([1, 1e10])
+    plt.xlim([1, 1e11])
     plt.ylim([10, 2e4])
     plt.tight_layout()
 
     plt.figure(figsize=(7.5, 5))
     plt.title('Fraction of neutrons relative to protons.')
-    for mclass, moptions, mtitle in pmodels:
-        plt.plot(evec, nfrac[mtitle], ls='-', lw=1.5, label=mtitle)
+    for mclass, moptions, mtitle, color, ls in pmodels:
+        plt.plot(evec, nfrac[mtitle], color=color, ls=ls, lw=1.5, label=mtitle)
 
     plt.semilogx()
     plt.xlabel(r"$E_{nucleon}$ [GeV]")
     plt.ylabel("Neutron fraction")
     plt.legend(loc=0, frameon=False, numpoints=1, ncol=2)
-    plt.xlim([1, 1e10])
+    plt.xlim([1, 1e11])
     plt.tight_layout()
 
     plt.figure(figsize=(7.5, 5))
     plt.title('Mean log mass <lnA>.')
-    for mclass, moptions, mtitle in pmodels:
-        plt.plot(evec, lnA[mtitle], ls='-', lw=1.5, label=mtitle)
+    for mclass, moptions, mtitle, color, ls in pmodels:
+        plt.plot(evec, lnA[mtitle], color=color, ls=ls, lw=1.5, label=mtitle)
 
     plt.semilogx()
     plt.xlabel(r"$E_{particle}$ [GeV]")
     plt.ylabel("$<\ln{A}>$")
     plt.legend(loc=0, frameon=False, numpoints=1, ncol=2)
-    plt.xlim([1, 1e10])
+    plt.xlim([1, 1e11])
     plt.tight_layout()
 
     plt.show()
