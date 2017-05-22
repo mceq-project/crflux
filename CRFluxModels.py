@@ -813,11 +813,11 @@ class Thunman(PrimaryFlux):
         self.params["low_e"] = (1e4 * 1.7, -2.7)
         self.params["high_e"] = (1e4 * 174, -3.0)
         self.params["trans"] = 5e6
-        self.nucleus_flux = np.vectorize(self.nucleus_flux_scalar)
+        self.nucleus_flux = np.vectorize(self.nucleus_flux)
 
         self.nucleus_ids = [14]
 
-    def nucleus_flux_scalar(self, corsika_id, E):
+    def nucleus_flux(self, corsika_id, E):
         if corsika_id != 14:
             return 0.0
         if E < self.params["trans"]:
@@ -836,10 +836,10 @@ class SimplePowerlaw27(PrimaryFlux):
 
     def __init__(self, opt=None):
         self.params = (1e4 * 1.7, -2.7)
-        self.nucleus_flux = np.vectorize(self.nucleus_flux_scalar)
+        self.nucleus_flux = np.vectorize(self.nucleus_flux)
         self.nucleus_ids = [14]
 
-    def nucleus_flux_scalar(self, corsika_id, E):
+    def nucleus_flux(self, corsika_id, E):
         if corsika_id != 14:
             return 0.0
 
@@ -865,7 +865,7 @@ class GlobalSplineFit(PrimaryFlux):
     def nucleus_flux(self, corsika_id, E):
         from gsf.flux import eflux
         z, a = self.Z_A(corsika_id)
-        if E < 1e2:
+        if E < 10.* a:
             return np.nan
         return eflux(z, E)
 
