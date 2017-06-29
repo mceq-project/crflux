@@ -865,9 +865,29 @@ class GlobalSplineFit(PrimaryFlux):
     def nucleus_flux(self, corsika_id, E):
         from gsf.flux import eflux
         z, a = self.Z_A(corsika_id)
-        if E < 10.* a:
+        if E < 10. * a:
             return np.nan
         return eflux(z, E)
+
+    def nucleon_flux_and_uncertainty(self, E, mag):
+        from gsf.flux import nucleon_flux, nucleon_flux_cov
+        y1 = np.sum(nucleon_flux(1, E), axis=0) * E**mag
+        y2 = np.sum(nucleon_flux(2, E), axis=0) * E**mag
+        y3 = np.sum(nucleon_flux(8, E), axis=0) * E**mag
+        y4 = np.sum(nucleon_flux(26, E), axis=0) * E**mag
+        y5 = y1 + y2 + y3 + y4
+
+        y1err = np.diag(nucleon_flux_cov(1, 1, E))**0.5 * E**mag
+        y2err = np.diag(nucleon_flux_cov(2, 2, E))**0.5 * E**mag
+        y3err = np.diag(nucleon_flux_cov(8, 8, E))**0.5 * E**mag
+        y4err = np.diag(nucleon_flux_cov(26, 26, E))**0.5 * E**mag
+        y5cov = 0.0
+        for l1 in (1, 2, 8, 26):
+            for l2 in (1, 2, 8, 26):
+                y5cov += nucleon_flux_cov(l1, l2, E)
+        y5err = np.diag(y5cov)**0.5 * E**mag
+
+        return y5, y5err
 
 
 if __name__ == '__main__':
