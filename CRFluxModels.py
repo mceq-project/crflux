@@ -1047,6 +1047,17 @@ class GlobalSplineFitBeta(PrimaryFlux):
         n_flux = np.exp(self.n_flux_spl(np.log(E)))
 
         return p_frac, p_flux, n_flux
+    
+    def tot_nucleon_flux(self, E):
+        """Returns total flux of nucleons, the "all-nucleon-flux".
+
+        Args:
+          E (float): laboratory energy of nucleons in GeV
+        Returns:
+          (float): nucleon flux :math:`\\Phi_{nucleons}` in
+          :math:`(\\text{m}^2 \\text{s sr GeV})^{-1}`
+        """
+        return np.sum(self.p_and_n_flux(E)[1:], axis=0)
 
     def nucleus_flux(self, corsika_id, E):
         """ Dummy function, since for particle fluxes are not supported
