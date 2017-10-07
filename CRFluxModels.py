@@ -97,6 +97,7 @@ Example:
     plt.show()
 '''
 from abc import ABCMeta, abstractmethod
+
 import numpy as np
 
 
@@ -860,51 +861,218 @@ class GlobalSplineFit(PrimaryFlux):
 
     def __init__(self, opt=None):
         from gsf.flux import z_to_a
-        self.nucleus_ids = [a * 100 + z for (z, a) in z_to_a.items()]
+        self.time_interval = (200901, 201612)
+        self.nucleus_ids = [
+            int(round(a)) * 100 + int(z) for (z, a) in z_to_a.items()
+        ]
 
     def nucleus_flux(self, corsika_id, E):
+        """Returns the flux of nuclei corresponding to
+        the ``corsika_id`` at energy ``E``.
+
+        Args:
+          corsika_id (int): see :mod:`CRFluxModels` for description.
+          E (float): laboratory energy of nucleus in GeV
+        Returns:
+          (float): flux of single nucleus type :math:`\\Phi_{nucleus}`
+          in :math:`(\\text{m}^2 \\text{s sr GeV})^{-1}`
+        """
         from gsf.flux import eflux
         z, a = self.Z_A(corsika_id)
-        if E < 10. * a:
-            return np.nan
-        return eflux(z, E)
+        return eflux(z, E, time_interval=self.time_interval)
 
-    def nucleon_flux_and_uncertainty(self, E, mag):
-        from gsf.flux import nucleon_flux, nucleon_flux_cov
-        y1 = np.sum(nucleon_flux(1, E), axis=0) * E**mag
-        y2 = np.sum(nucleon_flux(2, E), axis=0) * E**mag
-        y3 = np.sum(nucleon_flux(8, E), axis=0) * E**mag
-        y4 = np.sum(nucleon_flux(26, E), axis=0) * E**mag
-        y5 = y1 + y2 + y3 + y4
+    def p_and_n_flux(self, E):
+        """Returns tuple with proton fraction, proton flux and neutron flux.
 
-        y1err = np.diag(nucleon_flux_cov(1, 1, E))**0.5 * E**mag
-        y2err = np.diag(nucleon_flux_cov(2, 2, E))**0.5 * E**mag
-        y3err = np.diag(nucleon_flux_cov(8, 8, E))**0.5 * E**mag
-        y4err = np.diag(nucleon_flux_cov(26, 26, E))**0.5 * E**mag
-        y5cov = 0.0
-        for l1 in (1, 2, 8, 26):
-            for l2 in (1, 2, 8, 26):
-                y5cov += nucleon_flux_cov(l1, l2, E)
-        y5err = np.diag(y5cov)**0.5 * E**mag
+        The proton fraction is defined as :math:`\\frac{\\Phi_p}{\\Phi_p + \\Phi_n}`.
 
-        return y5, y5err
+        Args:
+          E (float): laboratory energy of nucleons in GeV
+        Returns:
+          (float,float,float): proton fraction, proton flux, neutron flux
+        """
+        from gsf.flux import nucleon_flux
+        pnflux = [
+            nucleon_flux(Z_leading, E, time_interval=self.time_interval)
+            for Z_leading in [1, 2, 8, 26]
+        ]
+        p_flux, n_flux = np.sum(pnflux, axis=0)
+        return p_flux / (p_flux + n_flux), p_flux, n_flux
+
+    def total_flux(self, E):
+        """Returns total flux of nuclei, the "all-particle-flux".
+
+        This version of the method does not vectorize the nucleus_flux method.
+        Args:
+          E (float): laboratory energy of particles in GeV
+        Returns:
+          (float): particle flux in :math:`\\Phi_{particles}` in
+          :math:`(\\text{m}^2 \\text{s sr GeV})^{-1}`
+        """
+
+        return sum([
+            self.nucleus_flux(corsika_id, E) for corsika_id in self.nucleus_ids
+        ])
+
+    def lnA(self, E):
+        """Returns mean logarithmic mass <ln A>/
+
+        This version of the method does not vectorize the nucleus_flux method.
+
+        Args:
+          E (float): laboratory energy of particles in GeV
+        Returns:
+          (float): mean (natural) logarithmic mass
+        """
+        sum_weight = 0.
+        for cid in self.nucleus_ids:
+            if cid == 14: continue  #p has lnA = 0
+            sum_weight += np.log(self.Z_A(cid)[1]) * self.nucleus_flux(cid, E)
+
+        return sum_weight / self.total_flux(E)
+
+    def dump_nucleon_flux_splines(self, emin=1., emax=1e12, nbins=1000):
+        """Dumps a nucleon flux splines of the full GSF model to a pickled file. 
+
+        Energy and flux coordiante are interpolated as a natural logarithm of
+        the values.
+
+        Args:
+          emin (float): minimal energy for the spline range
+          emax (float): maximal energy for the spline range
+          nbins (int): number of energy steps for interpolation
+        """
+        from scipy.interpolate import UnivariateSpline
+        from bz2 import BZ2File
+        from datetime import date
+        import cPickle as pickle
+
+        egrid = np.logspace(np.log10(emin), np.log10(emax), nbins)
+        p_frac, p_flux, n_flux = self.p_and_n_flux(egrid)
+        p_frac[p_frac < 0.] = 0.
+        p_flux[p_flux < 0.] = 1e-300
+        n_flux[n_flux < 0.] = 1e-300
+        opts = {'s': 0, 'ext': 1}
+        p_frac_spl = UnivariateSpline(np.log(egrid), p_frac, **opts)
+        p_flux_spl = UnivariateSpline(np.log(egrid), np.log(p_flux), **opts)
+        n_flux_spl = UnivariateSpline(np.log(egrid), np.log(n_flux), **opts)
+
+        pickle.dump(
+            (p_frac_spl, p_flux_spl, n_flux_spl),
+            BZ2File(
+                'GSF_spline_' + date.today().strftime('%Y%m%d') + '.pkl.bz2',
+                'wb'),
+            protocol=-1)
+
+    # def nucleon_flux_and_uncertainty(self, E, mag):
+    #     from gsf.flux import nucleon_flux, nucleon_flux_cov
+    #     y1 = np.sum(nucleon_flux(1, E), axis=0) * E**mag
+    #     y2 = np.sum(nucleon_flux(2, E), axis=0) * E**mag
+    #     y3 = np.sum(nucleon_flux(8, E), axis=0) * E**mag
+    #     y4 = np.sum(nucleon_flux(26, E), axis=0) * E**mag
+    #     y5 = y1 + y2 + y3 + y4
+
+    #     y1err = np.diag(nucleon_flux_cov(1, 1, E))**0.5 * E**mag
+    #     y2err = np.diag(nucleon_flux_cov(2, 2, E))**0.5 * E**mag
+    #     y3err = np.diag(nucleon_flux_cov(8, 8, E))**0.5 * E**mag
+    #     y4err = np.diag(nucleon_flux_cov(26, 26, E))**0.5 * E**mag
+    #     y5cov = 0.0
+    #     for l1 in (1, 2, 8, 26):
+    #         for l2 in (1, 2, 8, 26):
+    #             y5cov += nucleon_flux_cov(l1, l2, E)
+    #     y5err = np.diag(y5cov)**0.5 * E**mag
+
+    #     return y5, y5err
+
+
+class GlobalSplineFitBeta(PrimaryFlux):
+    """Data-driven fit of direct and indirect measurements of the
+    cosmic ray flux and composition. Tracks the mass composition using
+    four leading elements (p, He, O, Fe), whose flux is modeled by shaped
+    spline functions. Assumes fixed flux ratios in rigidity for the flux
+    of subleading elements. Covers the whole rigidity range from
+    10 GV to 10^11 GeV.
+
+    Tabulated ICRC 2017 version. The full interface will become
+    available, when the model is published. The class picks the most recent
+    spline file in the current directory.
+    """
+
+    name = "Dembinski et al. (2017)"
+    sname = "GSF"
+
+    def __init__(self, spl_fname=None):
+        import bz2, pickle, os
+        import os.path as path
+        base_path = path.dirname(path.abspath(__file__))
+
+        if spl_fname is None:
+            # Look for all files starting with GSF_spline
+            gsf_files = [
+                fname for fname in os.listdir(base_path)
+                if fname.startswith('GSF_spline_')
+            ]
+
+            if not gsf_files:
+                raise Exception(self.__class__.__name__ +
+                                ': No spline files found in ' + base_path)
+
+            spl_fname = gsf_files[0]
+            # Find out file datetag
+            fdate = lambda fn: int(os.path.splitext(
+                os.path.splitext(fn)[0])[0].split('_')[-1])
+            # Pick the latest
+            for fn in gsf_files:
+                if fdate(fn) >= fdate(spl_fname):
+                    spl_fname = fn
+
+        self.p_frac_spl, self.p_flux_spl, self.n_flux_spl = pickle.load(
+            bz2.BZ2File(os.path.join(base_path, spl_fname)))
+
+        self.nucleus_ids = []
+
+    def p_and_n_flux(self, E):
+        """Returns tuple with proton fraction, proton flux and neutron flux.
+
+        The proton fraction is defined as :math:`\\frac{\\Phi_p}{\\Phi_p + \\Phi_n}`.
+
+        Args:
+          E (float): laboratory energy of nucleons in GeV
+        Returns:
+          (float,float,float): proton fraction, proton flux, neutron flux
+        """
+        p_frac = self.p_frac_spl(np.log(E))
+
+        p_flux = np.exp(self.p_flux_spl(np.log(E)))
+        n_flux = np.exp(self.n_flux_spl(np.log(E)))
+
+        return p_frac, p_flux, n_flux
+
+    def nucleus_flux(self, corsika_id, E):
+        """ Dummy function, since for particle fluxes are not supported
+        in the spline interface version"""
+
+        return np.zeros_like(E)
 
 
 if __name__ == '__main__':
 
     from matplotlib import pyplot as plt
-    pmodels = [(GaisserStanevTilav, "3-gen", "GST 3-gen", "b",
-                "--"), (GaisserStanevTilav, "4-gen", "GST 4-gen", "b",
-                        "-"), (CombinedGHandHG, "H3a", "cH3a", "g", "--"),
-               (CombinedGHandHG, "H4a", "cH4a", "g",
-                "-"), (HillasGaisser2012, "H3a", "H3a", "r",
-                       "--"), (HillasGaisser2012, "H4a", "H4a", "r",
-                               "-"), (PolyGonato, False, "poly-gonato", "m",
-                                      "-"), (Thunman, None, "TIG", "y", "-"),
-               (ZatsepinSokolskaya, 'default', 'ZS', "c",
-                "-"), (ZatsepinSokolskaya, 'pamela', 'ZSP', "c",
-                       "--"), (GaisserHonda, None, 'GH', "0.5",
-                               "-"), (GlobalSplineFit, None, 'GSF', "k", "-")]
+    pmodels = [
+        (GaisserStanevTilav, "3-gen", "GST 3-gen", "b", "--"),
+        (GaisserStanevTilav, "4-gen", "GST 4-gen", "b", "-"),
+        (CombinedGHandHG, "H3a", "cH3a", "g", "--"),
+        (CombinedGHandHG, "H4a", "cH4a", "g", "-"),
+        (HillasGaisser2012, "H3a", "H3a", "r", "--"),
+        (HillasGaisser2012, "H4a", "H4a", "r", "-"),
+        (PolyGonato, False, "poly-gonato", "m", "-"),
+        (Thunman, None, "TIG", "y", "-"),
+        (ZatsepinSokolskaya, 'default', 'ZS', "c", "-"),
+        (ZatsepinSokolskaya, 'pamela', 'ZSP', "c", "--"),
+        (GaisserHonda, None, 'GH', "0.5", "-"),
+        #    (GlobalSplineFit, None, 'GSF', "k", "-"),
+        (GlobalSplineFitBeta, None, 'GSF spl', "k", ":")
+    ]
 
     nfrac = {}
     lnA = {}
@@ -912,6 +1080,7 @@ if __name__ == '__main__':
     plt.figure(figsize=(7.5, 5))
     plt.title('Cosmic ray nucleon flux (proton + neutron)')
     for mclass, moptions, mtitle, color, ls in pmodels:
+
         pmod = mclass(moptions)
         pfrac, p, n = pmod.p_and_n_flux(evec)
         plt.plot(
@@ -921,6 +1090,8 @@ if __name__ == '__main__':
             lw=1.5,
             label=mtitle)
         nfrac[mtitle] = (1 - pfrac)
+        if 'spl' in mtitle:
+            continue
         lnA[mtitle] = pmod.lnA(evec)
 
     plt.loglog()
@@ -930,6 +1101,7 @@ if __name__ == '__main__':
     plt.xlim([1, 1e11])
     plt.ylim([10, 2e4])
     plt.tight_layout()
+    pmodels = pmodels[:-1]
 
     plt.figure(figsize=(7.5, 5))
     plt.title('Cosmic ray particle flux (all-nuclei).')
