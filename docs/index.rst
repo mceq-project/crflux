@@ -3,8 +3,8 @@
    You can adapt this file completely to your liking, but it should at least
    contain the root `toctree` directive.
 
-Documentation for :mod:`CRFluxModels`
-=====================================
+Documentation for :py:mod:`crflux`
+==================================
 
 Historically, this module was part of the research code for a paper 
 `A. Fedynitch, J. Becker Tjus, and P. Desiati, Phys. Rev. D 86, 114024 
@@ -29,7 +29,7 @@ something, feel free to send a pull request or just branch/fork and let me know.
 Module documentation
 ````````````````````
 
-.. automodule:: CRFluxModels
+.. automodule:: models
    :members:
 
 

@@ -1,25 +1,24 @@
 # -*- coding: utf-8 -*-
 from setuptools import setup
 
-__version__ = "1.0.0rc3"
+__version__ = "1.0.0b1"
 
 def setup_package():
     long_description = ''.join(open('README.rst').readlines()[4:])
 
     arguments = dict(
-        name='particletools',
+        name='crflux',
         version=__version__,
         author='Anatoli Fedynitch',
         author_email='afedynitch@gmail.com',
-        description='Translating particle codes from CR models from/to PDG codes',
+        description='Numerical model of the cosmic ray flux at Earth',
         long_description=long_description,
         license="MIT",
-        url='https://github.com/afedynitch/ParticleDataTool',
-        package_dir={'particletools': 'particletools'},
-        packages=['particletools'],
+        url='https://github.com/afedynitch/CRFluxModels',
+        package_dir={'crflux': 'crflux'},
+        packages=['crflux'],
         install_requires=['setuptools'],
-        py_modules=["six"],
-        package_data={'particletools': ['ParticleData.xml']},
+        py_modules=['six', 'numpy', 'matplotlib'],
         classifiers=[
             'Programming Language :: Python',
             'Programming Language :: Python :: 2',
