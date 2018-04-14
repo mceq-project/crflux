@@ -292,7 +292,8 @@ class PrimaryFlux(with_metaclass(ABCMeta)):
 
         nuc_flux = np.vectorize(self.nucleus_flux)
         for cid in self.nucleus_ids:
-            if cid == 14: continue  #p has lnA = 0
+            if cid == 14: 
+                continue  #p has lnA = 0
             sum_weight += np.log(self.Z_A(cid)[1]) * nuc_flux(cid, E)
 
         return sum_weight / self.total_flux(E)
