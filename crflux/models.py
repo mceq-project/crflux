@@ -1066,7 +1066,7 @@ class GlobalSplineFitBeta(PrimaryFlux):
         return np.zeros_like(E)
 
 
-if __name__ == '__main__':
+def test():
 
     from matplotlib import pyplot as plt
     pmodels = [
@@ -1082,7 +1082,7 @@ if __name__ == '__main__':
         (ZatsepinSokolskaya, 'pamela', 'ZSP', "c", "--"),
         (GaisserHonda, None, 'GH', "0.5", "-"),
         #    (GlobalSplineFit, None, 'GSF', "k", "-"),
-        (GlobalSplineFitBeta, None, 'GSF spl', "k", ":")
+        # (GlobalSplineFitBeta, None, 'GSF spl', "k", ":")
     ]
 
     nfrac = {}
