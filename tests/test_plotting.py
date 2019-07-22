@@ -3,7 +3,6 @@ import crflux.models as mods
 import numpy as np
 
 def test_plotting():
-
     
     pmodels = [
         (mods.GaisserStanevTilav, "3-gen", "GST 3-gen", "b", "--"),
@@ -93,3 +92,4 @@ def test_plotting():
     plt.tight_layout()
 
     plt.show()
+
