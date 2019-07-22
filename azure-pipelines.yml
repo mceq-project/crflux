@@ -6,6 +6,8 @@
 trigger:
 - master
 
+jobs:
+  
 - job: 'Package'
   pool:
     vmImage: 'ubuntu-latest'
