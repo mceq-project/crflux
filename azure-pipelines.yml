@@ -6,31 +6,29 @@
 trigger:
 - master
 
-pool:
-  vmImage: 'ubuntu-latest'
-strategy:
-  matrix:
-    Python27:
-      python.version: '2.7'
-    Python35:
-      python.version: '3.5'
-    Python36:
-      python.version: '3.6'
-    Python37:
-      python.version: '3.7'
+- job: 'Package'
+  pool:
+    vmImage: 'ubuntu-latest'
+  steps:
+  - task: UsePythonVersion@0
+    inputs:
+      versionSpec: '3.7'
+      architecture: 'x64'
 
-steps:
-- task: UsePythonVersion@0
-  inputs:
-    versionSpec: '$(python.version)'
-  displayName: 'Use Python $(python.version)'
+  - script: |
+      python -m pip install --upgrade pip
+      python -m pip install --upgrade setuptools wheel
+    displayName: 'Install dependencies'
 
-- script: |
-    python -m pip install --upgrade pip
-    pip install -r requirements.txt
-  displayName: 'Install dependencies'
+  - script: |
+      python setup.py sdist
+    displayName: 'Make sdist'
 
-- script: |
-    pip install pytest pytest-azurepipelines
-    pytest
-  displayName: 'pytest'
+  - script: |
+      python setup.py bdist_wheel --universal
+    displayName: 'Make wheel'
+
+  - task: PublishPipelineArtifact@0
+    inputs:
+      artifactName: 'artifact'
+      targetPath: 'dist'
