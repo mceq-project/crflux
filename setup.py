@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from setuptools import setup
 
-__version__ = "1.0.0rc1"
+__version__ = "1.0.2"
 
 def setup_package():
     long_description = ''.join(open('README.rst').readlines()[4:])
@@ -17,7 +17,7 @@ def setup_package():
         url='https://github.com/afedynitch/CRFluxModels',
         package_dir={'crflux': 'crflux'},
         packages=['crflux'],
-        install_requires=['setuptools', 'numpy', 'scipy', 'matplotlib'],
+        install_requires=['setuptools', 'numpy', 'scipy'],
         py_modules=['six'],
         classifiers=[
             'Programming Language :: Python',
