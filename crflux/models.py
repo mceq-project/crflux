@@ -1061,7 +1061,7 @@ class GlobalSplineFitBeta(PrimaryFlux):
             spl_fname = os.path.join(base_path, spl_fname)
 
         self.p_frac_spl, self.p_flux_spl, self.n_flux_spl = pickle.load(
-            bz2.BZ2File(spl_fname))
+            bz2.BZ2File(spl_fname), encoding='latin1')
 
         self.nucleus_ids = []
 
