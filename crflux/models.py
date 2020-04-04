@@ -151,7 +151,7 @@ class PrimaryFlux(with_metaclass(ABCMeta)):
         the ``corsika_id`` at energy ``E``.
 
         Args:
-          corsika_id (int): see :mod:`CRFluxModels` for description.
+          corsika_id (int): see :mod:`crflux` for description.
           E (float): laboratory energy of nucleus in GeV
         Returns:
           (float): flux of single nucleus type :math:`\\Phi_{nucleus}`
@@ -903,7 +903,7 @@ class GlobalSplineFit(PrimaryFlux):
         the ``corsika_id`` at energy ``E``.
 
         Args:
-          corsika_id (int): see :mod:`CRFluxModels` for description.
+          corsika_id (int): see :mod:`crflux` for description.
           E (float): laboratory energy of nucleus in GeV
         Returns:
           (float): flux of single nucleus type :math:`\\Phi_{nucleus}`
