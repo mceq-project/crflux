@@ -41,9 +41,16 @@ jobs:
 
     - script: |
         pip install pytest pytest-azurepipelines
+        pip install -r .ci/requirements.txt
         pip install .
-        pytest
+        pytest --junitxml=junit/test-results.xml
       displayName: 'pytest'
+
+    - task: PublishTestResults@2
+      inputs:
+        testResultsFiles: '**/test-*.xml'
+        testRunTitle: 'Publish test results for Python $(python.version)'
+      condition: succeededOrFailed()
 
     - task: PublishPipelineArtifact@0
       inputs:
