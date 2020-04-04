@@ -3,8 +3,17 @@
 # Add steps that analyze code, save the dist with the build record, publish to a PyPI-compatible index, and more:
 # https://docs.microsoft.com/azure/devops/pipelines/languages/python
 
+
+## The release build overwrites these trigger in Azure
 trigger:
-- master
+  branches:
+    include:
+      - master
+      - 'refs/tags/*'
+    exclude:
+      - next_*
+pr:
+  - master
 
 jobs:
   
@@ -29,6 +38,12 @@ jobs:
     - script: |
         python setup.py bdist_wheel --universal
       displayName: 'Make wheel'
+
+    - script: |
+        pip install pytest pytest-azurepipelines
+        pip install .
+        pytest
+      displayName: 'pytest'
 
     - task: PublishPipelineArtifact@0
       inputs:
