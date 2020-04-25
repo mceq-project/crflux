@@ -17,7 +17,7 @@ def test_plotting():
         (mods.ZatsepinSokolskaya, 'pamela', 'ZSP', "c", "--"),
         (mods.GaisserHonda, None, 'GH', "0.5", "-"),
         #    (GlobalSplineFit, None, 'GSF', "k", "-"),
-        # (GlobalSplineFitBeta, None, 'GSF spl', "k", ":")
+        (mods.GlobalSplineFitBeta, None, 'GSF spl', "k", ":")
     ]
 
     nfrac = {}
@@ -36,7 +36,7 @@ def test_plotting():
             lw=1.5,
             label=mtitle)
         nfrac[mtitle] = (1 - pfrac)
-        if 'spl' in mtitle:
+        if isinstance(pmod, mods.GlobalSplineFitBeta):
             continue
         lnA[mtitle] = pmod.lnA(evec)
 
@@ -47,8 +47,21 @@ def test_plotting():
     plt.xlim([1, 1e11])
     plt.ylim([10, 2e4])
     plt.tight_layout()
-    pmodels = pmodels[:-1]
 
+
+    plt.figure(figsize=(7.5, 5))
+    plt.title('Fraction of neutrons relative to protons.')
+    for mclass, moptions, mtitle, color, ls in pmodels:
+        plt.plot(evec, nfrac[mtitle], color=color, ls=ls, lw=1.5, label=mtitle)
+
+    plt.semilogx()
+    plt.xlabel(r"$E_{nucleon}$ [GeV]")
+    plt.ylabel("Neutron fraction")
+    plt.legend(loc=0, frameon=False, numpoints=1, ncol=2)
+    plt.xlim([1, 1e11])
+    plt.tight_layout()
+    
+    pmodels = [m for m in pmodels if 'GSF' not in m[2]]
     plt.figure(figsize=(7.5, 5))
     plt.title('Cosmic ray particle flux (all-nuclei).')
 
@@ -68,18 +81,6 @@ def test_plotting():
     plt.tight_layout()
 
     plt.figure(figsize=(7.5, 5))
-    plt.title('Fraction of neutrons relative to protons.')
-    for mclass, moptions, mtitle, color, ls in pmodels:
-        plt.plot(evec, nfrac[mtitle], color=color, ls=ls, lw=1.5, label=mtitle)
-
-    plt.semilogx()
-    plt.xlabel(r"$E_{nucleon}$ [GeV]")
-    plt.ylabel("Neutron fraction")
-    plt.legend(loc=0, frameon=False, numpoints=1, ncol=2)
-    plt.xlim([1, 1e11])
-    plt.tight_layout()
-
-    plt.figure(figsize=(7.5, 5))
     plt.title('Mean log mass <lnA>.')
     for mclass, moptions, mtitle, color, ls in pmodels:
         plt.plot(evec, lnA[mtitle], color=color, ls=ls, lw=1.5, label=mtitle)
@@ -91,5 +92,5 @@ def test_plotting():
     plt.xlim([1, 1e11])
     plt.tight_layout()
 
-    plt.show()
+    # plt.show()
 

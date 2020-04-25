@@ -1,4 +1,4 @@
-'''
+r'''
 :mod:`models` --- models of the cosmic ray flux at the top of Earth's atmosphere
 ================================================================================
 
@@ -9,7 +9,7 @@ calculations, cosmic ray physics, radiation physics etc.
 
 The numbering scheme for nuclei is adapted from the Cosmic Ray Air-Shower Monte
 Carlo `CORSIKA <https://web.ikp.kit.edu/corsika/>`_. Protons have the ID 14. The
-composite ID for nuclei follows the formula :math:`ID=100 \\cdot A + Z`, where
+composite ID for nuclei follows the formula :math:`ID=100 \cdot A + Z`, where
 :math:`A` is the mass number and :math:`Z` the charge. With this scheme one can
 easily obtain charge and mass from the ID and vice-versa (see :func:`PrimaryFlux.Z_A`).
 
@@ -32,19 +32,19 @@ Example:
     from crflux.models import *
     from matplotlib import pyplot as plt
     pmodels = [
-        (GaisserStanevTilav, "3-gen", "GST 3-gen", "b", "--"),
-        (GaisserStanevTilav, "4-gen", "GST 4-gen", "b", "-"),
-        (CombinedGHandHG, "H3a", "cH3a", "g", "--"),
-        (CombinedGHandHG, "H4a", "cH4a", "g", "-"),
-        (HillasGaisser2012, "H3a", "H3a", "r", "--"),
-        (HillasGaisser2012, "H4a", "H4a", "r", "-"),
-        (PolyGonato, False, "poly-gonato", "m", "-"),
-        (Thunman, None, "TIG", "y", "-"),
-        (ZatsepinSokolskaya, 'default', 'ZS', "c", "-"),
-        (ZatsepinSokolskaya, 'pamela', 'ZSP', "c", "--"),
-        (GaisserHonda, None, 'GH', "0.5", "-"),
+        (mods.GaisserStanevTilav, "3-gen", "GST 3-gen", "b", "--"),
+        (mods.GaisserStanevTilav, "4-gen", "GST 4-gen", "b", "-"),
+        (mods.CombinedGHandHG, "H3a", "cH3a", "g", "--"),
+        (mods.CombinedGHandHG, "H4a", "cH4a", "g", "-"),
+        (mods.HillasGaisser2012, "H3a", "H3a", "r", "--"),
+        (mods.HillasGaisser2012, "H4a", "H4a", "r", "-"),
+        (mods.PolyGonato, False, "poly-gonato", "m", "-"),
+        (mods.Thunman, None, "TIG", "y", "-"),
+        (mods.ZatsepinSokolskaya, 'default', 'ZS', "c", "-"),
+        (mods.ZatsepinSokolskaya, 'pamela', 'ZSP', "c", "--"),
+        (mods.GaisserHonda, None, 'GH', "0.5", "-"),
         #    (GlobalSplineFit, None, 'GSF', "k", "-"),
-        # (GlobalSplineFitBeta, None, 'GSF spl', "k", ":")
+        (mods.GlobalSplineFitBeta, None, 'GSF spl', "k", ":")
     ]
 
     nfrac = {}
@@ -63,7 +63,7 @@ Example:
             lw=1.5,
             label=mtitle)
         nfrac[mtitle] = (1 - pfrac)
-        if 'spl' in mtitle:
+        if isinstance(pmod, mods.GlobalSplineFitBeta):
             continue
         lnA[mtitle] = pmod.lnA(evec)
 
@@ -74,8 +74,21 @@ Example:
     plt.xlim([1, 1e11])
     plt.ylim([10, 2e4])
     plt.tight_layout()
-    pmodels = pmodels[:-1]
 
+
+    plt.figure(figsize=(7.5, 5))
+    plt.title('Fraction of neutrons relative to protons.')
+    for mclass, moptions, mtitle, color, ls in pmodels:
+        plt.plot(evec, nfrac[mtitle], color=color, ls=ls, lw=1.5, label=mtitle)
+
+    plt.semilogx()
+    plt.xlabel(r"$E_{nucleon}$ [GeV]")
+    plt.ylabel("Neutron fraction")
+    plt.legend(loc=0, frameon=False, numpoints=1, ncol=2)
+    plt.xlim([1, 1e11])
+    plt.tight_layout()
+    
+    pmodels = [m for m in pmodels if 'GSF' not in m[2]]
     plt.figure(figsize=(7.5, 5))
     plt.title('Cosmic ray particle flux (all-nuclei).')
 
@@ -92,18 +105,6 @@ Example:
     plt.legend(loc=0, frameon=False, numpoints=1, ncol=2)
     plt.xlim([1, 1e11])
     plt.ylim([10, 2e4])
-    plt.tight_layout()
-
-    plt.figure(figsize=(7.5, 5))
-    plt.title('Fraction of neutrons relative to protons.')
-    for mclass, moptions, mtitle, color, ls in pmodels:
-        plt.plot(evec, nfrac[mtitle], color=color, ls=ls, lw=1.5, label=mtitle)
-
-    plt.semilogx()
-    plt.xlabel(r"$E_{nucleon}$ [GeV]")
-    plt.ylabel("Neutron fraction")
-    plt.legend(loc=0, frameon=False, numpoints=1, ncol=2)
-    plt.xlim([1, 1e11])
     plt.tight_layout()
 
     plt.figure(figsize=(7.5, 5))
@@ -144,6 +145,8 @@ class PrimaryFlux(with_metaclass(ABCMeta)):
     """Base class for primary cosmic ray flux models.
 
     """
+    def __init__(self):
+        self.nucleus_ids = None
 
     @abstractmethod
     def nucleus_flux(self, corsika_id, E):
@@ -1029,9 +1032,11 @@ class GlobalSplineFitBeta(PrimaryFlux):
     Tabulated ICRC 2017 version. The full interface will become
     available, when the model is published. The class picks the most recent
     spline file in the current directory.
+
+    Use for reference: Dembinski et al., PoS ICRC2017 533 https://inspirehep.net/literature/1639832
     """
 
-    name = "Dembinski et al. (2017)"
+    name = "Global Spline Fit"
     sname = "GSF"
 
     def __init__(self, spl_fname=None):

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from setuptools import setup
 
-__version__ = "1.0.4"
+__version__ = "1.0.5"
 
 def setup_package():
     from os.path import abspath, dirname, join
@@ -29,7 +29,9 @@ def setup_package():
         url='https://github.com/afedynitch/crflux',
         package_dir={'crflux': 'crflux'},
         packages=['crflux'],
+        package_data={'crflux': ['GSF_spline_20171007.pkl.bz2']},
         install_requires=['setuptools', 'numpy', 'scipy'],
+        extras_require={"tests": ["pytest", "matplotlib"]},
         py_modules=['six'],
         classifiers=[
             'Programming Language :: Python',
