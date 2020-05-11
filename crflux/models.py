@@ -1064,9 +1064,12 @@ class GlobalSplineFitBeta(PrimaryFlux):
                 if fdate(fn) >= fdate(spl_fname):
                     spl_fname = fn
             spl_fname = os.path.join(base_path, spl_fname)
-
-        self.p_frac_spl, self.p_flux_spl, self.n_flux_spl = pickle.load(
-            bz2.BZ2File(spl_fname), encoding='latin1')
+        try:
+            self.p_frac_spl, self.p_flux_spl, self.n_flux_spl = pickle.load(
+                bz2.BZ2File(spl_fname), encoding='latin1')
+        except TypeError:
+            self.p_frac_spl, self.p_flux_spl, self.n_flux_spl = pickle.load(
+                bz2.BZ2File(spl_fname))
 
         self.nucleus_ids = []
 
