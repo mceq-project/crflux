@@ -24,12 +24,12 @@ in this documentation.
 Example:
   To generate the plots from below, run::
 
-        from crflux.models import *
+        from crflux.models import test
         test()
 
 .. plot::
 
-    from crflux.models import *
+    import crflux.models as mods
     from matplotlib import pyplot as plt
     pmodels = [
         (mods.GaisserStanevTilav, "3-gen", "GST 3-gen", "b", "--"),
