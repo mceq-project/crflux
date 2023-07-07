@@ -562,7 +562,7 @@ class GaisserStanevTilav(PrimaryFlux):
         self.rid_cutoff[1] = 120e3
         self.rid_cutoff[2] = 4e6
 
-        mass_comp = [14, 402, 1206, 1608, 5426]
+        mass_comp = [14, 402, 1206, 1608, 5426, 12852, 20180]
         for mcomp in mass_comp:
             self.params[mcomp] = {}
 
@@ -571,6 +571,8 @@ class GaisserStanevTilav(PrimaryFlux):
         self.params[1206][1] = (100, 1.4, 6)  # C
         self.params[1608][1] = (130, 1.4, 8)  # O
         self.params[5426][1] = (60, 1.3, 26)  # Fe
+        self.params[12852][1] = (0, 1.0, 52)  # Te
+        self.params[20180][1] = (0, 1.0, 80)  # Hg
 
         self.params[14][2] = (150, 1.4, 1)  # H
         self.params[402][2] = (65, 1.3, 2)  # He
@@ -579,6 +581,8 @@ class GaisserStanevTilav(PrimaryFlux):
 
         if self.model == "3-gen":
             self.params[5426][2] = (2.3, 1.2, 26)  # Fe
+            self.params[12852][2] = (0.1, 1.2, 52)  # Te
+            self.params[20180][2] = (0.4, 1.2, 80)  # Hg
             self.rid_cutoff[3] = 1.3e9
 
             self.params[14][3] = (14, 1.4, 1)  # H
@@ -586,9 +590,13 @@ class GaisserStanevTilav(PrimaryFlux):
             self.params[1206][3] = (0, 1.4, 6)  # CNO
             self.params[1608][3] = (0, 1.3, 8)  # O
             self.params[5426][3] = (0.025, 1.2, 26)  # Fe
+            self.params[12852][3] = (0, 1.0, 52)  # Te
+            self.params[20180][3] = (0, 1.0, 80)  # Hg
 
         elif self.model == "4-gen":
             self.params[5426][2] = (2.1, 1.2, 26)  # Fe
+            self.params[12852][2] = (0.1, 1.2, 52)  # Te
+            self.params[20180][2] = (0.53, 1.2, 80)  # Hg
 
             self.rid_cutoff[3] = 1.5e9
             self.params[14][3] = (12., 1.4, 1)  # H
@@ -596,6 +604,8 @@ class GaisserStanevTilav(PrimaryFlux):
             self.params[1206][3] = (0, 1.4, 6)  # CNO
             self.params[1608][3] = (0, 1.3, 8)  # O
             self.params[5426][3] = (0.011, 1.2, 26)  # Fe
+            self.params[12852][3] = (0, 1.0, 52)  # Te
+            self.params[20180][3] = (0, 1.0, 80)  # Hg
 
             self.rid_cutoff[4] = 40e9
             self.params[14][4] = (1.2, 1.4, 1)  # H
@@ -603,6 +613,8 @@ class GaisserStanevTilav(PrimaryFlux):
             self.params[1206][4] = (0, 0, 6)  # CNO
             self.params[1608][4] = (0, 0, 8)  # O
             self.params[5426][4] = (0, 0, 26)  # Fe
+            self.params[12852][3] = (0, 1.0, 52)  # Te
+            self.params[20180][3] = (0, 1.0, 80)  # Hg
         else:
             raise Exception('GaisserStanevTilav(): Unknown model version.')
 
