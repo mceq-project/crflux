@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 from setuptools import setup
 
-__version__ = "1.0.7"
+__version__ = "1.0.8"
 
 def setup_package():
     from os.path import abspath, dirname, join
@@ -38,10 +38,12 @@ def setup_package():
             'Programming Language :: Python :: 2',
             'Programming Language :: Python :: 2.7',
             'Programming Language :: Python :: 3',
-            'Programming Language :: Python :: 3.5',
-            'Programming Language :: Python :: 3.6',
             'Programming Language :: Python :: 3.7',
             'Programming Language :: Python :: 3.8',
+            'Programming Language :: Python :: 3.9',
+            'Programming Language :: Python :: 3.10',
+            'Programming Language :: Python :: 3.11',
+            'Programming Language :: Python :: 3.12',
             'Topic :: Scientific/Engineering :: Physics',
             'Intended Audience :: Science/Research',
             'Development Status :: 5 - Production/Stable',

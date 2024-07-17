@@ -545,12 +545,14 @@ class GaisserStanevTilav(PrimaryFlux):
 
     Args:
       model (str): 3-gen or 4-gen
+      include_heavy_in_total (bool, optional): if True, the total flux will include the
+        heavy component groups (Te, Hg) as well. Default is False for legacy compatibility.
 
     Raises:
       Exception: if ``model`` not properly specified.
     """
 
-    def __init__(self, model="3-gen"):
+    def __init__(self, model="3-gen", include_heavy_in_total=False):
         PrimaryFlux.__init__(self)
 
         self.name = 'GST (' + model + ')'
@@ -617,8 +619,8 @@ class GaisserStanevTilav(PrimaryFlux):
             self.params[20180][3] = (0, 1.0, 80)  # Hg
         else:
             raise Exception('GaisserStanevTilav(): Unknown model version.')
-
-        self.nucleus_ids = list(self.params.keys())
+        
+        self.nucleus_ids = [ k for k in self.params.keys() if k not in [12852, 20180] ]
 
     def nucleus_flux(self, corsika_id, E):
         corsika_id = self._find_nearby_id(corsika_id)
