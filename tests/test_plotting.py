@@ -30,21 +30,27 @@ def test_plotting():
     
     # Try to add GlobalSplineFit2025 (using 2025 version) if available
     try:
+        # Test that the model can be instantiated
+        _ = mods.GlobalSplineFit2025(version="2025")
         pmodels.append((lambda opts: mods.GlobalSplineFit2025(version="2025"), None, 'GSF2025', "k", "-"))
-    except (ImportError, AttributeError):
-        pass  # Module not available or not imported
+    except (ImportError, AttributeError, ModuleNotFoundError) as e:
+        warnings.warn(f"GlobalSplineFit2025 (2025) not available: {e}", ImportWarning)
     
     # Try to add GlobalSplineFit2019 (using 2019 version) if available
     try:
+        # Test that the model can be instantiated
+        _ = mods.GlobalSplineFit2025(version="2019")
         pmodels.append((lambda opts: mods.GlobalSplineFit2025(version="2019"), None, 'GSF2019', "k", "-."))
-    except (ImportError, AttributeError):
-        pass  # Module not available or not imported
+    except (ImportError, AttributeError, ModuleNotFoundError) as e:
+        warnings.warn(f"GlobalSplineFit2025 (2019) not available: {e}", ImportWarning)
     
     # Try to add GlobalSplineFit2017 (using 2017 version) if available
     try:
+        # Test that the model can be instantiated
+        _ = mods.GlobalSplineFit2025(version="2017")
         pmodels.append((lambda opts: mods.GlobalSplineFit2025(version="2017"), None, 'GSF2017', "k", "--"))
-    except (ImportError, AttributeError):
-        pass  # Module not available or not imported
+    except (ImportError, AttributeError, ModuleNotFoundError) as e:
+        warnings.warn(f"GlobalSplineFit2025 (2017) not available: {e}", ImportWarning)
 
     nfrac = {}
     lnA = {}
@@ -141,67 +147,70 @@ def test_plotting():
 
     # Add ratio plots if GSF2025 is available
     if 'GSF2025' in nucleon_flux:
-        # Ratio plot for nucleon flux
-        evec_ratio = np.logspace(0, 7, 500)  # Limited to 10^7 GeV
-        plt.figure(figsize=(7.5, 5))
-        plt.title('Nucleon flux ratio relative to GSF2025')
-        
-        # Get GSF2025 reference flux at ratio energy points (explicitly use version="2025")
-        gsf2025_mod = mods.GlobalSplineFit2025(version="2025")
-        _, p_ref, n_ref = gsf2025_mod.p_and_n_flux(evec_ratio)
-        nucleon_flux_ref = p_ref + n_ref
-        
-        for mclass, moptions, mtitle, color, ls in pmodels:
-            if mtitle == 'GSF2025':
-                continue  # Skip the reference itself
-            
-            pmod = mclass(moptions)
-            pfrac, p, n = pmod.p_and_n_flux(evec_ratio)
-            flux_ratio = (p + n) / nucleon_flux_ref
-            
-            plt.plot(evec_ratio, flux_ratio, color=color, ls=ls, lw=1.5, label=mtitle)
-        
-        plt.axhline(y=1.0, color='k', ls='-', lw=1.5, label='GSF2025', alpha=0.5)
-        plt.semilogx()
-        plt.xlabel(r"$E_{nucleon}$ [GeV]")
-        plt.ylabel("Flux ratio relative to GSF2025")
-        plt.legend(loc='best', frameon=False, numpoints=1, ncol=2, fontsize=8)
-        plt.xlim([1, 1e7])
-        plt.ylim([0.7, 1.3])
-        plt.grid(True, alpha=0.3)
-        plt.tight_layout()
-        plt.savefig(os.path.join(test_dir, 'nucleon_flux_ratio.png'), dpi=150)
-        plt.close()
-        
-        # Ratio plot for total nucleus flux
-        if 'GSF2025' in total_flux:
+        try:
+            # Ratio plot for nucleon flux
+            evec_ratio = np.logspace(0, 7, 500)  # Limited to 10^7 GeV
             plt.figure(figsize=(7.5, 5))
-            plt.title('Total particle flux ratio relative to GSF2025')
+            plt.title('Nucleon flux ratio relative to GSF2025')
             
-            # Get GSF2025 reference total flux at ratio energy points
-            total_flux_ref = gsf2025_mod.total_flux(evec_ratio)
+            # Get GSF2025 reference flux at ratio energy points (explicitly use version="2025")
+            gsf2025_mod = mods.GlobalSplineFit2025(version="2025")
+            _, p_ref, n_ref = gsf2025_mod.p_and_n_flux(evec_ratio)
+            nucleon_flux_ref = p_ref + n_ref
             
-            for mclass, moptions, mtitle, color, ls in pmodels_filtered:
+            for mclass, moptions, mtitle, color, ls in pmodels:
                 if mtitle == 'GSF2025':
                     continue  # Skip the reference itself
                 
                 pmod = mclass(moptions)
-                flux = pmod.total_flux(evec_ratio)
-                flux_ratio = flux / total_flux_ref
+                pfrac, p, n = pmod.p_and_n_flux(evec_ratio)
+                flux_ratio = (p + n) / nucleon_flux_ref
                 
                 plt.plot(evec_ratio, flux_ratio, color=color, ls=ls, lw=1.5, label=mtitle)
             
             plt.axhline(y=1.0, color='k', ls='-', lw=1.5, label='GSF2025', alpha=0.5)
             plt.semilogx()
-            plt.xlabel(r"$E_{particle}$ [GeV]")
+            plt.xlabel(r"$E_{nucleon}$ [GeV]")
             plt.ylabel("Flux ratio relative to GSF2025")
             plt.legend(loc='best', frameon=False, numpoints=1, ncol=2, fontsize=8)
             plt.xlim([1, 1e7])
             plt.ylim([0.7, 1.3])
             plt.grid(True, alpha=0.3)
             plt.tight_layout()
-            plt.savefig(os.path.join(test_dir, 'total_flux_ratio.png'), dpi=150)
+            plt.savefig(os.path.join(test_dir, 'nucleon_flux_ratio.png'), dpi=150)
             plt.close()
+            
+            # Ratio plot for total nucleus flux
+            if 'GSF2025' in total_flux:
+                plt.figure(figsize=(7.5, 5))
+                plt.title('Total particle flux ratio relative to GSF2025')
+                
+                # Get GSF2025 reference total flux at ratio energy points
+                total_flux_ref = gsf2025_mod.total_flux(evec_ratio)
+                
+                for mclass, moptions, mtitle, color, ls in pmodels_filtered:
+                    if mtitle == 'GSF2025':
+                        continue  # Skip the reference itself
+                    
+                    pmod = mclass(moptions)
+                    flux = pmod.total_flux(evec_ratio)
+                    flux_ratio = flux / total_flux_ref
+                    
+                    plt.plot(evec_ratio, flux_ratio, color=color, ls=ls, lw=1.5, label=mtitle)
+                
+                plt.axhline(y=1.0, color='k', ls='-', lw=1.5, label='GSF2025', alpha=0.5)
+                plt.semilogx()
+                plt.xlabel(r"$E_{particle}$ [GeV]")
+                plt.ylabel("Flux ratio relative to GSF2025")
+                plt.legend(loc='best', frameon=False, numpoints=1, ncol=2, fontsize=8)
+                plt.xlim([1, 1e7])
+                plt.ylim([0.7, 1.3])
+                plt.grid(True, alpha=0.3)
+                plt.tight_layout()
+                plt.savefig(os.path.join(test_dir, 'total_flux_ratio.png'), dpi=150)
+                plt.close()
+        except (ImportError, AttributeError, ModuleNotFoundError) as e:
+            warnings.warn(f"Could not generate GSF2025 ratio plots: {e}", ImportWarning)
 
     # plt.show()
 

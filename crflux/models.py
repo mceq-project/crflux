@@ -1054,7 +1054,18 @@ class GlobalSplineFit2025(PrimaryFlux):
         PrimaryFlux.__init__(self)
 
         # Import GSF models - use total energy model for nucleus flux
-        from globalsplinefit import GSFEnergy, GSFEnergyPerNucleon
+        try:
+            from globalsplinefit import GSFEnergy, GSFEnergyPerNucleon
+        except ImportError:
+            import warnings
+            warnings.warn(
+                "GlobalSplineFit2025 requires the 'globalsplinefit' package. "
+                "Install it with: pip install globalsplinefit\n"
+                "This model will not be available.",
+                ImportWarning,
+                stacklevel=2
+            )
+            raise
 
         self._gsf_nucleus_model = GSFEnergy(version=version)
         self._gsf_nucleon_model = GSFEnergyPerNucleon(version=version)
