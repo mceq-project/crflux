@@ -6,3 +6,9 @@ gsf
 crflux.egg-info
 dist/
 build
+plot_gallery_preview.html
+.pytest_cache/
+htmlcov/
+.coverage
+*.egg-info/
+__pycache__/

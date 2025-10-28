@@ -32,12 +32,12 @@ class TestGlobalSplineFit2025AgainstPackage:
     @pytest.fixture
     def gsf_nucleus_model(self):
         """Direct GSFEnergy model instance."""
-        return GSFEnergy()
+        return GSFEnergy(version="2025")
 
     @pytest.fixture
     def gsf_nucleon_model(self):
         """Direct GSFEnergyPerNucleon model instance."""
-        return GSFEnergyPerNucleon()
+        return GSFEnergyPerNucleon(version="2025")
 
     def test_proton_flux_consistency(self, crflux_model, gsf_nucleus_model, energies):
         """Test that proton flux matches between implementations."""
@@ -157,8 +157,8 @@ class TestGlobalSplineFit2025AgainstPackage:
     def test_solar_modulation_LIS(self, energies):
         """Test that LIS (no solar modulation) works consistently."""
         # Create models with LIS
-        crflux_model_lis = crm.GlobalSplineFit2025(time_interval="LIS")
-        gsf_nucleus_model = GSFEnergy()
+        crflux_model_lis = crm.GlobalSplineFit2025(version="2025", time_interval="LIS")
+        gsf_nucleus_model = GSFEnergy(version="2025")
         
         # Get proton flux with LIS
         crflux_proton_lis = crflux_model_lis.nucleus_flux(14, energies)
@@ -176,8 +176,8 @@ class TestGlobalSplineFit2025AgainstPackage:
         """Test that specific time intervals work consistently."""
         # Create models with specific time interval
         time_interval = (201501, 201512)  # 2015
-        crflux_model_2015 = crm.GlobalSplineFit2025(time_interval=time_interval)
-        gsf_nucleus_model = GSFEnergy()
+        crflux_model_2015 = crm.GlobalSplineFit2025(version="2025", time_interval=time_interval)
+        gsf_nucleus_model = GSFEnergy(version="2025")
         
         # Get proton flux for 2015
         crflux_proton_2015 = crflux_model_2015.nucleus_flux(14, energies)
@@ -437,7 +437,7 @@ class TestGlobalSplineFit2025EdgeCases:
     def test_very_low_energy(self):
         """Test behavior at very low energies."""
         crflux_model = crm.GlobalSplineFit2025()
-        gsf_model = GSFEnergy()
+        gsf_model = GSFEnergy(version="2025")
         
         # Test at lower energy boundary
         E = 10.0  # 10 GeV
@@ -454,7 +454,7 @@ class TestGlobalSplineFit2025EdgeCases:
     def test_very_high_energy(self):
         """Test behavior at very high energies."""
         crflux_model = crm.GlobalSplineFit2025()
-        gsf_model = GSFEnergy()
+        gsf_model = GSFEnergy(version="2025")
         
         # Test at upper energy boundary
         E = 1e11  # 10^11 GeV

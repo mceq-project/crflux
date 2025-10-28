@@ -1,7 +1,7 @@
 ![PyPI](https://img.shields.io/pypi/v/crflux)
 [![Documentation](https://readthedocs.org/projects/crfluxmodels/badge/?version=latest)](https://crfluxmodels.readthedocs.io/en/latest/?badge=latest)
-![Azure DevOps builds](https://img.shields.io/azure-devops/build/afedynitch/MCEq/7)
-![Azure DevOps tests](https://img.shields.io/azure-devops/tests/afedynitch/MCEq/7)
+[![Tests](https://github.com/mceq-project/crflux/actions/workflows/test.yml/badge.svg)](https://github.com/mceq-project/crflux/actions/workflows/test.yml)
+[![Plot Gallery](https://github.com/mceq-project/crflux/actions/workflows/plots.yml/badge.svg)](https://github.com/mceq-project/crflux/actions/workflows/plots.yml)
 
 # `crflux.models`:  parameterizations of the Cosmic Ray flux
 
