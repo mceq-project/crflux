@@ -1,0 +1,45 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "crflux"
+version = "1.2.0"
+authors = [
+    {name = "Anatoli Fedynitch", email = "afedynitch@gmail.com"},
+]
+description = "Parameterizations of the cosmic ray flux at Earth"
+readme = {file = "README.md", content-type = "text/markdown"}
+license = "MIT"
+requires-python = ">=3.9"
+dependencies = [
+    "numpy",
+    "scipy",
+]
+keywords = ["cosmic rays", "physics", "astrophysics", "flux"]
+classifiers = [
+    "Programming Language :: Python",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Programming Language :: Python :: 3.14",
+    "Topic :: Scientific/Engineering :: Physics",
+    "Intended Audience :: Science/Research",
+    "Development Status :: 5 - Production/Stable",
+]
+
+[project.urls]
+Homepage = "https://github.com/afedynitch/crflux"
+Repository = "https://github.com/afedynitch/crflux"
+Documentation = "https://crfluxmodels.readthedocs.io/"
+
+[project.optional-dependencies]
+tests = ["pytest", "matplotlib"]
+
+[tool.setuptools]
+packages = ["crflux"]
+
+[tool.setuptools.package-data]
+crflux = ["GSF_spline_20171007.pkl.bz2"]

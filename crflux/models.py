@@ -87,7 +87,7 @@ Example:
     plt.legend(loc=0, frameon=False, numpoints=1, ncol=2)
     plt.xlim([1, 1e11])
     plt.tight_layout()
-    
+
     pmodels = [m for m in pmodels if 'GSF' not in m[2]]
     plt.figure(figsize=(7.5, 5))
     plt.title('Cosmic ray particle flux (all-nuclei).')
@@ -433,7 +433,6 @@ class _BenzviMontaruli(PrimaryFlux):
         return self.BenzviFlux(corsika_id, E)
 
     def BenzviFlux(self, corsika_id, E):
-
         param = self.params[corsika_id]
         try:
             if E < param[3]:
@@ -468,7 +467,6 @@ class HillasGaisser2012(PrimaryFlux):
     """
 
     def __init__(self, model="H4a"):
-
         self.name = "Hillas-Gaisser (" + model + ")"
         self.sname = model
         self.model = model
@@ -781,7 +779,6 @@ class ZatsepinSokolskaya(PrimaryFlux):
         return R ** (-self.alpha[gen]) * self.phi(R, gen)
 
     def phi(self, R, gen):
-
         return (1 + (R / self.R_max[gen]) ** 2) ** (
             (self.gamma[gen] - self.gamma_k[gen]) / 2.0
         )
@@ -852,7 +849,6 @@ class GaisserHonda(PrimaryFlux):
     """
 
     def __init__(self, *args, **kwargs):
-
         self.name = "Gaisser-Honda"
         self.sname = "GH"
         self.params = {}
@@ -950,7 +946,7 @@ class GlobalSplineFit(PrimaryFlux):
     sname = "GSF"
 
     def __init__(self, *args, **kwargs):
-        from gsf.flux import z_to_a
+        from gsf import z_to_a
 
         self.time_interval = (200901, 201612)
         self.nucleus_ids = [
@@ -1026,57 +1022,153 @@ class GlobalSplineFit(PrimaryFlux):
 
         return sum_weight / self.total_flux(E)
 
-    def dump_nucleon_flux_splines(self, emin=1.0, emax=1e12, nbins=1000):
-        """Dumps a nucleon flux splines of the full GSF model to a pickled file.
 
-        Energy and flux coordiante are interpolated as a natural logarithm of
-        the values.
+class GlobalSplineFit2025(PrimaryFlux):
+    """Data-driven fit of direct and indirect measurements of the
+    cosmic ray flux and composition using the modernized globalsplinefit package.
+
+    Tracks the mass composition using four leading elements (p, He, O, Fe),
+    whose flux is modeled by shaped spline functions. Assumes fixed flux ratios
+    in rigidity for the flux of subleading elements. Covers the whole rigidity
+    range from 10 GV to 10^11 GeV.
+
+    This class provides a PrimaryFlux-compatible interface to the new
+    globalsplinefit.model module (2025 version). All energies are total energy
+    (kinetic + rest mass) as per the crflux convention.
+
+    Args:
+        version (str, optional): Model version to use ("2017", "2019", "2025").
+            If None, uses the default version from the package.
+        time_interval (tuple or str, optional): Time period for solar modulation:
+            - None: Solar Cycle 24 average (default)
+            - "LIS": Local Interstellar Spectrum (no modulation)
+            - tuple: (start, end) in YYYYMM format, e.g. (200901, 200912)
+    """
+
+    name = "Global Spline Fit ({0})"
+    sname = "GSF{0}"
+
+    def __init__(
+        self, version="2025", time_interval=None, use_approximate_solar_cycle_average=True
+    ):
+        PrimaryFlux.__init__(self)
+
+        # Import GSF models - use total energy model for nucleus flux
+        from globalsplinefit import GSFEnergy, GSFEnergyPerNucleon
+
+        self._gsf_nucleus_model = GSFEnergy(version=version)
+        self._gsf_nucleon_model = GSFEnergyPerNucleon(version=version)
+        self.time_interval = time_interval
+
+        self.name = self.name.format(self._gsf_nucleus_model.version)
+        self.sname = self.sname.format(self._gsf_nucleus_model.version)
+
+        # Build nucleus_ids list from z_to_a mapping
+        # Convert from Z to CORSIKA ID format (A*100 + Z)
+        self.nucleus_ids = []
+        for z, a in self._gsf_nucleus_model.z_to_a.items():
+            corsika_id = int(round(a)) * 100 + int(z)
+            self.nucleus_ids.append(corsika_id)
+
+        # Sort for consistency
+        self.nucleus_ids.sort()
+
+    def nucleus_flux(self, corsika_id, E):
+        """Returns the flux of nuclei corresponding to the ``corsika_id`` at energy ``E``.
 
         Args:
-          emin (float): minimal energy for the spline range
-          emax (float): maximal energy for the spline range
-          nbins (int): number of energy steps for interpolation
+            corsika_id (int): CORSIKA particle ID (see :mod:`crflux` for description)
+            E (float or array): Total laboratory energy of nucleus in GeV
+                (kinetic + rest mass energy).
+
+        Returns:
+            float or array: Flux of single nucleus type :math:`\\Phi_{nucleus}`
+            in :math:`(\\text{m}^2 \\text{s sr GeV})^{-1}`
         """
-        from scipy.interpolate import UnivariateSpline
-        from bz2 import BZ2File
-        from datetime import date
-        import pickle as pickle
+        z, a = self.Z_A(corsika_id)
 
-        egrid = np.logspace(np.log10(emin), np.log10(emax), nbins)
-        p_frac, p_flux, n_flux = self.p_and_n_flux(egrid)
-        p_frac[p_frac < 0.0] = 0.0
-        p_flux[p_flux < 0.0] = 1e-300
-        n_flux[n_flux < 0.0] = 1e-300
-        opts = {"s": 0, "ext": 1}
-        p_frac_spl = UnivariateSpline(np.log(egrid), p_frac, **opts)
-        p_flux_spl = UnivariateSpline(np.log(egrid), np.log(p_flux), **opts)
-        n_flux_spl = UnivariateSpline(np.log(egrid), np.log(n_flux), **opts)
+        # Check if this element is in the GSF model
+        if z not in self._gsf_nucleus_model.z_to_a:
+            # Return zero flux for elements not in the model
+            return np.zeros_like(np.atleast_1d(E))
 
-        pickle.dump(
-            (p_frac_spl, p_flux_spl, n_flux_spl),
-            BZ2File("GSF_spline_" + date.today().strftime("%Y%m%d") + ".pkl.bz2", "wb"),
-            protocol=-1,
+        # Call the GSF model with the atomic number
+        flux = self._gsf_nucleus_model.flux(E, z, time_interval=self.time_interval)
+
+        return flux
+
+    def p_and_n_flux(self, E):
+        """Returns tuple with proton fraction, proton flux and neutron flux.
+
+        The proton fraction is defined as :math:`\\frac{\\Phi_p}{\\Phi_p + \\Phi_n}`.
+
+        Args:
+            E (float or array): Total laboratory energy per nucleon in GeV
+                (kinetic + rest mass energy per nucleon).
+
+        Returns:
+            tuple: (proton fraction, proton flux, neutron flux)
+                - proton fraction (float or array): :math:`\\Phi_p / (\\Phi_p + \\Phi_n)`
+                - proton flux (float or array): in :math:`(\\text{m}^2 \\text{s sr GeV})^{-1}`
+                - neutron flux (float or array): in :math:`(\\text{m}^2 \\text{s sr GeV})^{-1}`
+        """
+        # Use the GSF nucleon model's built-in method that sums over all groups
+        pn_flux = self._gsf_nucleon_model.p_and_n_total_flux(
+            E, time_interval=self.time_interval
         )
 
-    # def nucleon_flux_and_uncertainty(self, E, mag):
-    #     from gsf.flux import nucleon_flux, nucleon_flux_cov
-    #     y1 = np.sum(nucleon_flux(1, E), axis=0) * E**mag
-    #     y2 = np.sum(nucleon_flux(2, E), axis=0) * E**mag
-    #     y3 = np.sum(nucleon_flux(8, E), axis=0) * E**mag
-    #     y4 = np.sum(nucleon_flux(26, E), axis=0) * E**mag
-    #     y5 = y1 + y2 + y3 + y4
+        total_p_flux = pn_flux[0]
+        total_n_flux = pn_flux[1]
 
-    #     y1err = np.diag(nucleon_flux_cov(1, 1, E))**0.5 * E**mag
-    #     y2err = np.diag(nucleon_flux_cov(2, 2, E))**0.5 * E**mag
-    #     y3err = np.diag(nucleon_flux_cov(8, 8, E))**0.5 * E**mag
-    #     y4err = np.diag(nucleon_flux_cov(26, 26, E))**0.5 * E**mag
-    #     y5cov = 0.0
-    #     for l1 in (1, 2, 8, 26):
-    #         for l2 in (1, 2, 8, 26):
-    #             y5cov += nucleon_flux_cov(l1, l2, E)
-    #     y5err = np.diag(y5cov)**0.5 * E**mag
+        # Calculate proton fraction, avoiding division by zero
+        with np.errstate(divide="ignore", invalid="ignore"):
+            p_fraction = total_p_flux / (total_p_flux + total_n_flux)
+            p_fraction[~np.isfinite(p_fraction)] = 0.0
 
-    #     return y5, y5err
+        return p_fraction, total_p_flux, total_n_flux
+
+    def total_flux(self, E):
+        """Returns total flux of nuclei, the "all-particle-flux".
+
+        Args:
+            E (float or array): Total laboratory energy per nucleus in GeV
+                (kinetic + rest mass energy).
+
+        Returns:
+            float or array: Particle flux :math:`\\Phi_{particles}` in
+            :math:`(\\text{m}^2 \\text{s sr GeV})^{-1}`
+        """
+        # Use the GSF model's built-in total_flux method which sums over all groups
+        return self._gsf_nucleus_model.total_flux(E, time_interval=self.time_interval)
+
+    def lnA(self, E):
+        """Returns mean logarithmic mass <ln A>.
+
+        Args:
+            E (float or array): Total laboratory energy per nucleus in GeV
+                (kinetic + rest mass energy).
+
+        Returns:
+            float or array: Mean (natural) logarithmic mass
+        """
+        E = np.atleast_1d(E)
+        sum_weight = np.zeros_like(E, dtype=float)
+
+        for cid in self.nucleus_ids:
+            if cid == 14:
+                continue  # p has lnA = 0
+            z, a = self.Z_A(cid)
+            if z in self._gsf_nucleus_model.z_to_a:
+                sum_weight += np.log(a) * self.nucleus_flux(cid, E)
+
+        total = self.total_flux(E)
+
+        # Avoid division by zero
+        with np.errstate(divide="ignore", invalid="ignore"):
+            result = sum_weight / total
+            result[total == 0] = 0.0
+
+        return result
 
 
 class GlobalSplineFitBeta(PrimaryFlux):
@@ -1118,9 +1210,10 @@ class GlobalSplineFitBeta(PrimaryFlux):
 
             spl_fname = gsf_files[0]
             # Find out file datetag
-            fdate = lambda fn: int(
-                os.path.splitext(os.path.splitext(fn)[0])[0].split("_")[-1]
-            )
+            def fdate(fn):
+                return int(
+                    os.path.splitext(os.path.splitext(fn)[0])[0].split("_")[-1]
+                )
             # Pick the latest
             for fn in gsf_files:
                 if fdate(fn) >= fdate(spl_fname):

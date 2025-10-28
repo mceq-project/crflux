@@ -4,3 +4,5 @@
 gsf
 .vscode
 crflux.egg-info
+dist/
+build
