@@ -961,7 +961,10 @@ class GlobalSplineFit2025(PrimaryFlux):
     sname = "GSF{0}"
 
     def __init__(
-        self, version="2025", time_interval=None, use_approximate_solar_cycle_average=True
+        self,
+        version="2025",
+        time_interval=None,
+        use_approximate_solar_cycle_average=True,
     ):
         PrimaryFlux.__init__(self)
 
@@ -970,17 +973,24 @@ class GlobalSplineFit2025(PrimaryFlux):
             from globalsplinefit import GSFEnergy, GSFEnergyPerNucleon
         except ImportError:
             import warnings
+
             warnings.warn(
                 "GlobalSplineFit2025 requires the 'globalsplinefit' package. "
                 "Install it with: pip install globalsplinefit\n"
                 "This model will not be available.",
                 ImportWarning,
-                stacklevel=2
+                stacklevel=2,
             )
             raise
 
-        self._gsf_nucleus_model = GSFEnergy(version=version)
-        self._gsf_nucleon_model = GSFEnergyPerNucleon(version=version)
+        self._gsf_nucleus_model = GSFEnergy(
+            version=version,
+            use_approximate_solar_cycle_average=use_approximate_solar_cycle_average,
+        )
+        self._gsf_nucleon_model = GSFEnergyPerNucleon(
+            version=version,
+            use_approximate_solar_cycle_average=use_approximate_solar_cycle_average,
+        )
         self.time_interval = time_interval
 
         self.name = self.name.format(self._gsf_nucleus_model.version)
@@ -1132,11 +1142,11 @@ class GlobalSplineFitBeta(PrimaryFlux):
                 )
 
             spl_fname = gsf_files[0]
+
             # Find out file datetag
             def fdate(fn):
-                return int(
-                    os.path.splitext(os.path.splitext(fn)[0])[0].split("_")[-1]
-                )
+                return int(os.path.splitext(os.path.splitext(fn)[0])[0].split("_")[-1])
+
             # Pick the latest
             for fn in gsf_files:
                 if fdate(fn) >= fdate(spl_fname):
@@ -1188,16 +1198,402 @@ class GlobalSplineFitBeta(PrimaryFlux):
         return np.zeros_like(E)
 
 
+class PCAGlobalSplineFit(PrimaryFlux):
+    """Low-Rank Plus Diagonal Global Spline Fit model for reduced-parameter cosmic ray flux.
+
+    This class provides a Low-Rank Plus Diagonal approximation of the GSF model,
+    decomposing the covariance as Σ ≈ L*L^T + D where:
+    - L is a low-rank factor capturing correlations
+    - D is a diagonal term ensuring EXACT marginal variances
+
+    The model has r latent parameters φ ~ N(μ, Σ_φ) and generates:
+    δf/f = L*φ + ε, where ε ~ N(0, D)
+    f = f_central * (1 + δf/f)
+
+    This approach exactly preserves the diagonal (marginal uncertainties) while
+    compressing the correlation structure, unlike standard PCA which can underestimate
+    uncertainties when using fewer components.
+
+    Args:
+        comp (int, optional): Component number to vary (1-indexed). If None, uses
+            the default (mean) flux prediction.
+        delta (float, optional): Variation magnitude in units of sigma (standard
+            deviations) for the specified component. Only used if comp is not None.
+        pkl_fname (str, optional): Path to the Low-Rank Plus Diagonal data pickle file.
+            If None, looks for "LowRankPlusDiag_GSF_2025.pkl" in the crflux module directory.
+
+    Example:
+        >>> # Use default flux prediction
+        >>> model = PCAGlobalSplineFit()
+        >>> flux = model.tot_nucleon_flux(1000.0)
+        >>>
+        >>> # Vary first component by +1 sigma
+        >>> model_var = PCAGlobalSplineFit(comp=1, delta=1.0)
+        >>> flux_var = model_var.tot_nucleon_flux(1000.0)
+        >>>
+        >>> # Apply variation after initialization
+        >>> model.var_component(2, -0.5)  # Vary 2nd component by -0.5 sigma
+    """
+
+    name = "Low-Rank Plus Diagonal GSF (2025)"
+    sname = "LRDGSF2025"
+
+    def __init__(self, comp=None, delta=None, pkl_fname=None):
+        import pickle
+        import os.path as path
+
+        PrimaryFlux.__init__(self)
+
+        # Determine the pickle file path
+        if pkl_fname is None:
+            base_path = path.dirname(path.abspath(__file__))
+            pkl_fname = path.join(base_path, "LowRankPlusDiag_GSF_2025.pkl")
+
+        # Load Low-Rank Plus Diagonal data
+        with open(pkl_fname, "rb") as f:
+            (
+                self.x,
+                self.L,
+                self.D,
+                self.phi_cov,
+                self.phi_mean,
+                self.phi_std,
+                central_flux,
+            ) = pickle.load(f)
+
+        # Convert to arrays to avoid matrix multiplication issues
+        self.L = np.asarray(self.L)
+        self.D = np.asarray(self.D)
+        self.phi_cov = np.asarray(self.phi_cov)
+        self.phi_mean = np.asarray(self.phi_mean).flatten()
+        self.phi_std = np.asarray(self.phi_std).flatten()
+        self.central_flux = np.asarray(central_flux).flatten()
+
+        self.n_components = self.L.shape[1]
+        self.phi = np.copy(self.phi_mean)
+        self.phi_original = np.copy(self.phi_mean)
+
+        # Reconstruct flux: f = f_central * (1 + L*phi)
+        relative_var = self.L @ self.phi
+        self.flux = self.central_flux * (1.0 + relative_var)
+
+        # Empty nucleus_ids since this model only provides nucleon-level flux
+        self.nucleus_ids = []
+
+        # Apply variation if requested
+        if comp is not None:
+            self.var_component(comp, delta)
+
+    def p_and_n_flux(self, E):
+        """Returns tuple with proton fraction, proton flux and neutron flux.
+
+        The proton fraction is defined as :math:`\\frac{\\Phi_p}{\\Phi_p + \\Phi_n}`.
+
+        Args:
+            E (float or array): Laboratory energy of nucleons in GeV
+
+        Returns:
+            tuple: (proton fraction, proton flux, neutron flux)
+                - proton fraction (float or array): :math:`\\Phi_p / (\\Phi_p + \\Phi_n)`
+                - proton flux (float or array): in :math:`(\\text{m}^2 \\text{s sr GeV})^{-1}`
+                - neutron flux (float or array): in :math:`(\\text{m}^2 \\text{s sr GeV})^{-1}`
+        """
+        E = np.atleast_1d(E)
+
+        def interp(E, flux):
+            # Interpolate in log-log space
+            return np.exp(
+                np.interp(
+                    np.log(E), np.log(self.x), np.log(flux), left=-np.inf, right=-np.inf
+                )
+            )
+
+        p_flux = interp(E, self.flux[: len(self.x)])
+        n_flux = interp(E, self.flux[len(self.x) :])
+
+        # Compute proton fraction
+        p_frac = np.zeros_like(p_flux)
+        mask = (p_flux + n_flux) > 0
+        p_frac[mask] = p_flux[mask] / (p_flux[mask] + n_flux[mask])
+
+        # Return scalars if input was scalar
+        if E.shape == (1,):
+            return p_frac[0], p_flux[0], n_flux[0]
+
+        return p_frac, p_flux, n_flux
+
+    def tot_nucleon_flux(self, E):
+        """Returns total flux of nucleons, the "all-nucleon-flux".
+
+        Args:
+            E (float or array): Laboratory energy of nucleons in GeV
+
+        Returns:
+            float or array: Nucleon flux :math:`\\Phi_{nucleons}` in
+            :math:`(\\text{m}^2 \\text{s sr GeV})^{-1}`
+        """
+        return np.sum(self.p_and_n_flux(E)[1:], axis=0)
+
+    def nucleus_flux(self, corsika_id, E):
+        """Dummy function, since particle fluxes are not supported
+        in the PCA spline interface version.
+
+        Args:
+            corsika_id (int): CORSIKA particle ID
+            E (float or array): Laboratory energy in GeV
+
+        Returns:
+            array: Zero array matching the shape of E
+        """
+        return np.zeros_like(E)
+
+    def var_component(self, num, delta):
+        """Apply variation to one of the latent components.
+
+        The p_and_n_flux function will return the modified flux.
+        Delta is in units of standard deviation (sigma).
+
+        Args:
+            num (int): Component number (1-indexed, from 1 to n_components)
+            delta (float): Variation in units of sigma
+
+        Raises:
+            AssertionError: If num is not in valid range [1, n_components]
+
+        Example:
+            >>> model = PCAGlobalSplineFit()
+            >>> model.var_component(1, 1.0)  # Vary first component by +1 sigma
+            >>> model.var_component(2, -0.5)  # Additionally vary second component
+            >>> model.reset_components()  # Return to default
+        """
+        assert 0 < num <= self.n_components, (
+            f"Component {num} out of range [1, {self.n_components}]"
+        )
+
+        if not np.allclose(self.phi, self.phi_original):
+            print("Warning: previous modification detected. Applying additively.")
+
+        # Apply variation to latent parameter
+        self.phi[num - 1] += self.phi_std[num - 1] * delta
+        
+        # Reconstruct flux: f = f_central * (1 + L*phi)
+        relative_var = self.L @ self.phi
+        self.flux = self.central_flux * (1.0 + relative_var)
+
+    def reset_components(self):
+        """Reset all component variations to default values.
+
+        After calling this method, the model returns to its default state
+        (using the mean flux prediction without any variations).
+
+        Example:
+            >>> model = PCAGlobalSplineFit(comp=1, delta=1.0)
+            >>> model.reset_components()
+            >>> # Now model uses default flux again
+        """
+        self.phi = np.copy(self.phi_original)
+        relative_var = self.L @ self.phi
+        self.flux = self.central_flux * (1.0 + relative_var)
+
+    def _p_and_n_jacobian(self, E):
+        """Calculate Jacobian matrix for proton and neutron flux w.r.t. latent components.
+        
+        For the Low-Rank Plus Diagonal model:
+        flux = central_flux * (1 + L @ phi)
+        
+        The Jacobian represents d(flux)/d(phi_i) at each energy point.
+        
+        Args:
+            E (array): Energy points in GeV
+            
+        Returns:
+            tuple: (jac_p, jac_n) where each is shape (n_energies, n_components)
+        """
+        E = np.atleast_1d(E)
+        n_energies = len(E)
+        
+        # Get current flux values at requested energies
+        _, p_flux, n_flux = self.p_and_n_flux(E)
+        
+        # Get central flux at requested energies
+        log_E = np.log(E)
+        log_x = np.log(self.x)
+        
+        def interp_central(E, flux):
+            return np.exp(np.interp(np.log(E), log_x, np.log(flux), left=-np.inf, right=-np.inf))
+        
+        central_p = interp_central(E, self.central_flux[:len(self.x)])
+        central_n = interp_central(E, self.central_flux[len(self.x):])
+        
+        # Initialize Jacobians
+        jac_p = np.zeros((n_energies, self.n_components))
+        jac_n = np.zeros((n_energies, self.n_components))
+        
+        # For flux = central_flux * (1 + L @ phi):
+        # d(flux)/d(phi_i) = central_flux * L[:, i]
+        # We need to interpolate L to requested energies
+        
+        for i in range(self.n_components):
+            # L[:, i] gives the i-th column of L (contribution of phi[i] to relative variation)
+            # Split into proton and neutron parts
+            L_p_i = self.L[:len(self.x), i]
+            L_n_i = self.L[len(self.x):, i]
+            
+            # Interpolate to requested energies (linear in log-log space)
+            L_p_interp = np.interp(log_E, log_x, L_p_i, left=0, right=0)
+            L_n_interp = np.interp(log_E, log_x, L_n_i, left=0, right=0)
+            
+            # Jacobian: d(flux)/d(phi[i]) = central_flux * L[:, i]
+            jac_p[:, i] = central_p * L_p_interp
+            jac_n[:, i] = central_n * L_n_interp
+        
+        return jac_p, jac_n
+
+    def p_and_n_flux_error(self, E):
+        """Calculate uncertainty (1-sigma) for proton and neutron flux.
+
+        For the Low-Rank Plus Diagonal model, the total variance includes:
+        1. Low-rank component: (J @ phi_cov @ J^T) from latent parameter uncertainty
+        2. Diagonal component: D representing additional uncorrelated variance
+        
+        This ensures exact preservation of marginal variances.
+
+        Args:
+            E (float or array): Laboratory energy of nucleons in GeV
+
+        Returns:
+            tuple: (proton flux error, neutron flux error)
+                - proton flux error (float or array): 1-sigma uncertainty in
+                  :math:`(\\text{m}^2 \\text{s sr GeV})^{-1}`
+                - neutron flux error (float or array): 1-sigma uncertainty in
+                  :math:`(\\text{m}^2 \\text{s sr GeV})^{-1}`
+
+        Example:
+            >>> model = PCAGlobalSplineFit()
+            >>> p_err, n_err = model.p_and_n_flux_error(1000.0)
+            >>> # Calculate relative uncertainty
+            >>> _, p_flux, n_flux = model.p_and_n_flux(1000.0)
+            >>> p_rel_err = p_err / p_flux
+        """
+        E = np.atleast_1d(E)
+        
+        # Get Jacobians: shape (n_energies, n_components)
+        jac_p, jac_n = self._p_and_n_jacobian(E)
+        
+        # Calculate low-rank variance using Jacobian: Var_LR = J @ phi_cov @ J^T
+        # For diagonal elements only: var[i] = sum_j sum_k J[i,j] * phi_cov[j,k] * J[i,k]
+        var_lr_p = np.einsum('ij,jk,ik->i', jac_p, self.phi_cov, jac_p)
+        var_lr_n = np.einsum('ij,jk,ik->i', jac_n, self.phi_cov, jac_n)
+        
+        # Add diagonal variance component by interpolating D
+        log_E = np.log(E)
+        log_x = np.log(self.x)
+        
+        # Get central flux at requested energies for scaling
+        def interp_central(E, flux):
+            return np.exp(np.interp(np.log(E), log_x, np.log(flux), left=-np.inf, right=-np.inf))
+        
+        central_p = interp_central(E, self.central_flux[:len(self.x)])
+        central_n = interp_central(E, self.central_flux[len(self.x):])
+        
+        # Interpolate diagonal variance D
+        D_p = np.interp(log_E, log_x, self.D[:len(self.x)], left=0, right=0)
+        D_n = np.interp(log_E, log_x, self.D[len(self.x):], left=0, right=0)
+        
+        # D represents variance in relative space (δf/f)^2, so convert to flux space
+        var_diag_p = (central_p ** 2) * D_p
+        var_diag_n = (central_n ** 2) * D_n
+        
+        # Total variance = low-rank + diagonal
+        var_p = var_lr_p + var_diag_p
+        var_n = var_lr_n + var_diag_n
+        
+        # Ensure non-negative variances
+        var_p = np.maximum(var_p, 0)
+        var_n = np.maximum(var_n, 0)
+        
+        p_flux_err = np.sqrt(var_p)
+        n_flux_err = np.sqrt(var_n)
+
+        # Return scalars if input was scalar
+        if E.shape == (1,):
+            return p_flux_err[0], n_flux_err[0]
+
+        return p_flux_err, n_flux_err
+
+    def tot_nucleon_flux_error(self, E):
+        """Calculate uncertainty (1-sigma) for total nucleon flux.
+
+        The error accounts for correlations between proton and neutron fluxes
+        through the latent parameter covariance phi_cov, plus diagonal variance D.
+
+        Args:
+            E (float or array): Laboratory energy of nucleons in GeV
+
+        Returns:
+            float or array: Total nucleon flux uncertainty (1-sigma) in
+            :math:`(\\text{m}^2 \\text{s sr GeV})^{-1}`
+
+        Example:
+            >>> model = PCAGlobalSplineFit()
+            >>> tot_err = model.tot_nucleon_flux_error(1000.0)
+            >>> tot_flux = model.tot_nucleon_flux(1000.0)
+            >>> rel_err = tot_err / tot_flux  # Relative uncertainty
+        """
+        E = np.atleast_1d(E)
+        
+        # For total flux = p_flux + n_flux:
+        # Jacobian of total w.r.t. latent components = jac_p + jac_n
+        jac_p, jac_n = self._p_and_n_jacobian(E)
+        jac_total = jac_p + jac_n
+        
+        # Calculate low-rank variance: Var_LR(total) = J_total @ phi_cov @ J_total^T
+        # For diagonal elements: var[i] = sum_j sum_k J[i,j] * phi_cov[j,k] * J[i,k]
+        var_lr_total = np.einsum('ij,jk,ik->i', jac_total, self.phi_cov, jac_total)
+        
+        # Add diagonal variance component
+        log_E = np.log(E)
+        log_x = np.log(self.x)
+        
+        # Get central flux at requested energies
+        def interp_central(E, flux):
+            return np.exp(np.interp(np.log(E), log_x, np.log(flux), left=-np.inf, right=-np.inf))
+        
+        central_p = interp_central(E, self.central_flux[:len(self.x)])
+        central_n = interp_central(E, self.central_flux[len(self.x):])
+        
+        # Interpolate diagonal variance D for both components
+        D_p = np.interp(log_E, log_x, self.D[:len(self.x)], left=0, right=0)
+        D_n = np.interp(log_E, log_x, self.D[len(self.x):], left=0, right=0)
+        
+        # Convert to flux space and sum
+        var_diag_total = (central_p ** 2) * D_p + (central_n ** 2) * D_n
+        
+        # Total variance = low-rank + diagonal
+        var_total = var_lr_total + var_diag_total
+        
+        # Ensure non-negative variance
+        var_total = np.maximum(var_total, 0)
+        total_err = np.sqrt(var_total)
+
+        # Return scalar if input was scalar
+        if E.shape == (1,):
+            return total_err[0]
+
+        return total_err
+
+
 def test():
     """
     Test function to generate and display model comparison plots.
-    
+
     This function imports and calls the shared plotting function from
     crflux.plotting to display all flux model comparisons.
-    
+
     Example:
         >>> from crflux.models import test
         >>> test()  # This will display the plots
     """
     from crflux.plotting import test as plotting_test
+
     plotting_test()
