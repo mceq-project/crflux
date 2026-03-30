@@ -21,109 +21,22 @@ in this documentation.
     As always, if you use one of the models for your work, please cite the corresponding
     publication!
 
-Example:
-  To generate the plots from below, run::
-
-        from crflux.models import test
-        test()
-
-.. plot::
+Example::
 
     import crflux.models as mods
-    from matplotlib import pyplot as plt
-    pmodels = [
-        (mods.GaisserStanevTilav, "3-gen", "GST 3-gen", "b", "--"),
-        (mods.GaisserStanevTilav, "4-gen", "GST 4-gen", "b", "-"),
-        (mods.CombinedGHandHG, "H3a", "cH3a", "g", "--"),
-        (mods.CombinedGHandHG, "H4a", "cH4a", "g", "-"),
-        (mods.HillasGaisser2012, "H3a", "H3a", "r", "--"),
-        (mods.HillasGaisser2012, "H4a", "H4a", "r", "-"),
-        (mods.PolyGonato, False, "poly-gonato", "m", "-"),
-        (mods.Thunman, None, "TIG", "y", "-"),
-        (mods.ZatsepinSokolskaya, 'default', 'ZS', "c", "-"),
-        (mods.ZatsepinSokolskaya, 'pamela', 'ZSP', "c", "--"),
-        (mods.GaisserHonda, None, 'GH', "0.5", "-"),
-        #    (GlobalSplineFit, None, 'GSF', "k", "-"),
-        (mods.GlobalSplineFitBeta, None, 'GSF spl', "k", ":")
-    ]
+    import numpy as np
 
-    nfrac = {}
-    lnA = {}
-    evec = np.logspace(0, 11, 1000)
-    plt.figure(figsize=(7.5, 5))
-    plt.title('Cosmic ray nucleon flux (proton + neutron)')
-    for mclass, moptions, mtitle, color, ls in pmodels:
+    model = mods.HillasGaisser2012("H3a")
+    E = np.logspace(1, 11, 100)
+    pfrac, p, n = model.p_and_n_flux(E)
 
-        pmod = mclass(moptions)
-        pfrac, p, n = pmod.p_and_n_flux(evec)
-        plt.plot(
-            evec, (p + n) * evec**2.5,
-            color=color,
-            ls=ls,
-            lw=1.5,
-            label=mtitle)
-        nfrac[mtitle] = (1 - pfrac)
-        if isinstance(pmod, mods.GlobalSplineFitBeta):
-            continue
-        lnA[mtitle] = pmod.lnA(evec)
-
-    plt.loglog()
-    plt.xlabel(r"$E_{nucleon}$ [GeV]")
-    plt.ylabel(r"dN/dE (E/GeV)$^{2.5}$ (m$^{2}$ s sr GeV)$^{-1}$")
-    plt.legend(loc=0, frameon=False, numpoints=1, ncol=2)
-    plt.xlim([1, 1e11])
-    plt.ylim([10, 2e4])
-    plt.tight_layout()
-
-
-    plt.figure(figsize=(7.5, 5))
-    plt.title('Fraction of neutrons relative to protons.')
-    for mclass, moptions, mtitle, color, ls in pmodels:
-        plt.plot(evec, nfrac[mtitle], color=color, ls=ls, lw=1.5, label=mtitle)
-
-    plt.semilogx()
-    plt.xlabel(r"$E_{nucleon}$ [GeV]")
-    plt.ylabel("Neutron fraction")
-    plt.legend(loc=0, frameon=False, numpoints=1, ncol=2)
-    plt.xlim([1, 1e11])
-    plt.tight_layout()
-    
-    pmodels = [m for m in pmodels if 'GSF' not in m[2]]
-    plt.figure(figsize=(7.5, 5))
-    plt.title('Cosmic ray particle flux (all-nuclei).')
-
-    for mclass, moptions, mtitle, color, ls in pmodels:
-        pmod = mclass(moptions)
-
-        flux = pmod.total_flux(evec)
-        plt.plot(
-            evec, flux * evec**2.5, color=color, ls=ls, lw=1.5, label=mtitle)
-
-    plt.loglog()
-    plt.xlabel(r"$E_{particle}$ [GeV]")
-    plt.ylabel(r"dN/dE (E/GeV)$^{2.5}$ (m$^{2}$ s sr GeV)$^{-1}$")
-    plt.legend(loc=0, frameon=False, numpoints=1, ncol=2)
-    plt.xlim([1, 1e11])
-    plt.ylim([10, 2e4])
-    plt.tight_layout()
-
-    plt.figure(figsize=(7.5, 5))
-    plt.title('Mean log mass <lnA>.')
-    for mclass, moptions, mtitle, color, ls in pmodels:
-        plt.plot(evec, lnA[mtitle], color=color, ls=ls, lw=1.5, label=mtitle)
-
-    plt.semilogx()
-    plt.xlabel(r"$E_{particle}$ [GeV]")
-    plt.ylabel(r"$<\ln{A}>$")
-    plt.legend(loc=0, frameon=False, numpoints=1, ncol=2)
-    plt.xlim([1, 1e11])
-    plt.tight_layout()
-
-    plt.show()
+    # With geomagnetic cutoff of 7 GV
+    model_cut = mods.HillasGaisser2012("H3a", geomagnetic_cutoff=7.0)
+    pfrac_cut, p_cut, n_cut = model_cut.p_and_n_flux(E)
 """
 
 from abc import ABCMeta, abstractmethod
-from six import with_metaclass
+
 import numpy as np
 
 
@@ -142,58 +55,78 @@ def _get_closest(value, in_list):
     return minindex, in_list[minindex]
 
 
-class PrimaryFlux(with_metaclass(ABCMeta)):
-    """Base class for primary cosmic ray flux models."""
+class PrimaryFlux(metaclass=ABCMeta):
+    """Base class for primary cosmic ray flux models.
 
-    def __init__(self):
+    Args:
+      geomagnetic_cutoff (float, optional): rigidity cutoff in GV. If set,
+        the flux is zeroed below the corresponding energy for each nucleus.
+        For a nucleus with charge Z, the energy cutoff is E_cut = Z * R_cut.
+    """
+
+    def __init__(self, geomagnetic_cutoff=None):
         self.nucleus_ids = None
+        self.geomagnetic_cutoff = geomagnetic_cutoff
 
     @abstractmethod
-    def nucleus_flux(self, corsika_id, E):
+    def _nucleus_flux(self, corsika_id, E):
         """Returns the flux of nuclei corresponding to
         the ``corsika_id`` at energy ``E``.
 
         Args:
           corsika_id (int): see :mod:`crflux` for description.
-          E (float): laboratory energy of nucleus in GeV
+          E (numpy.ndarray): laboratory energy of nucleus in GeV
         Returns:
-          (float): flux of single nucleus type :math:`\\Phi_{nucleus}`
+          (numpy.ndarray): flux of single nucleus type :math:`\\Phi_{nucleus}`
           in :math:`(\\text{m}^2 \\text{s sr GeV})^{-1}`
         """
         raise NotImplementedError(
-            self.__class__.__name__
-            + "::nucleus_flux(): Base class method nucleus_flux called."
+            self.__class__.__name__ + "::_nucleus_flux(): Base class method called."
         )
+
+    def nucleus_flux(self, corsika_id, E):
+        """Returns the flux of nuclei corresponding to
+        the ``corsika_id`` at energy ``E``, with optional geomagnetic cutoff.
+
+        Args:
+          corsika_id (int): see :mod:`crflux` for description.
+          E (float or numpy.ndarray): laboratory energy of nucleus in GeV
+        Returns:
+          (numpy.ndarray): flux of single nucleus type :math:`\\Phi_{nucleus}`
+          in :math:`(\\text{m}^2 \\text{s sr GeV})^{-1}`
+        """
+        E = np.atleast_1d(np.asarray(E, dtype=float))
+        flux = self._nucleus_flux(corsika_id, E)
+        if self.geomagnetic_cutoff is not None:
+            Z, A = self.Z_A(corsika_id)
+            E_cut = Z * self.geomagnetic_cutoff
+            flux = np.where(E >= E_cut, flux, 0.0)
+        return flux
 
     def total_flux(self, E):
         """Returns total flux of nuclei, the "all-particle-flux".
 
         Args:
-          E (float): laboratory energy of particles in GeV
+          E (float or numpy.ndarray): laboratory energy of particles in GeV
         Returns:
-          (float): particle flux in :math:`\\Phi_{particles}` in
+          (numpy.ndarray): particle flux in :math:`\\Phi_{particles}` in
           :math:`(\\text{m}^2 \\text{s sr GeV})^{-1}`
         """
-
-        nuc_flux = np.vectorize(self.nucleus_flux)
-        return sum([nuc_flux(corsika_id, E) for corsika_id in self.nucleus_ids])
+        return sum(self.nucleus_flux(corsika_id, E) for corsika_id in self.nucleus_ids)
 
     def tot_nucleon_flux(self, E):
         """Returns total flux of nucleons, the "all-nucleon-flux".
 
         Args:
-          E (float): laboratory energy of nucleons in GeV
+          E (float or numpy.ndarray): laboratory energy of nucleons in GeV
         Returns:
-          (float): nucleon flux :math:`\\Phi_{nucleons}` in
+          (numpy.ndarray): nucleon flux :math:`\\Phi_{nucleons}` in
           :math:`(\\text{m}^2 \\text{s sr GeV})^{-1}`
         """
-        nuc_flux = np.vectorize(self.nucleus_flux)
         return sum(
-            [
-                self.Z_A(corsika_id)[1] ** 2.0
-                * nuc_flux(corsika_id, E * self.Z_A(corsika_id)[1])
-                for corsika_id in self.nucleus_ids
-            ]
+            self.Z_A(corsika_id)[1] ** 2.0
+            * self.nucleus_flux(corsika_id, E * self.Z_A(corsika_id)[1])
+            for corsika_id in self.nucleus_ids
         )
 
     def nucleon_gamma(self, E, rel_delta=0.01):
@@ -201,10 +134,10 @@ class PrimaryFlux(with_metaclass(ABCMeta)):
         obtained from a numerical derivative.
 
         Args:
-          E (float): laboratory energy of nucleons in GeV
+          E (float or numpy.ndarray): laboratory energy of nucleons in GeV
           rel_delta (float): range of derivative relative to log10(E)
         Returns:
-          (float): spectral index :math:`\\gamma` of nucleons
+          (numpy.ndarray): spectral index :math:`\\gamma` of nucleons
         """
         delta = rel_delta * E
         fl = self.tot_nucleon_flux
@@ -217,16 +150,16 @@ class PrimaryFlux(with_metaclass(ABCMeta)):
         obtained from a numerical derivative.
 
         Args:
-          E (float): laboratory energy of nuclei in GeV
+          E (float or numpy.ndarray): laboratory energy of nuclei in GeV
           corsika_id (int): corsika id of nucleus/mass group
           rel_delta (float): range of derivative relative to log10(E)
         Returns:
-          (float): spectral index :math:`\\gamma` of nuclei
+          (numpy.ndarray): spectral index :math:`\\gamma` of nuclei
         """
         delta = rel_delta * E
-        fl = np.vectorize(self.nucleus_flux)
         return np.log10(
-            fl(corsika_id, E + delta) / fl(corsika_id, E - delta)
+            self.nucleus_flux(corsika_id, E + delta)
+            / self.nucleus_flux(corsika_id, E - delta)
         ) / np.log10((E + delta) / (E - delta))
 
     def delta_0(self, E):
@@ -236,27 +169,27 @@ class PrimaryFlux(with_metaclass(ABCMeta)):
         :math:`\\delta_0 = \\frac{\\Phi_p - \\Phi_n}{\\Phi_p + \\Phi_n}`.
 
         Args:
-          E (float): laboratory energy of nucleons in GeV
+          E (float or numpy.ndarray): laboratory energy of nucleons in GeV
         Returns:
-          (float): proton excess :math:`\\delta_0`
+          (numpy.ndarray): proton excess :math:`\\delta_0`
         """
         p_0 = 0.0
         n_0 = 0.0
 
-        nuc_flux = np.vectorize(self.nucleus_flux)
-        p_0 += nuc_flux(14, E)
+        p_0 += self.nucleus_flux(14, E)
 
-        p_0 += 2.0**2 * nuc_flux(402, E * 4.0)
-        n_0 += 2.0**2 * nuc_flux(402, E * 4.0)
+        p_0 += 2.0**2 * self.nucleus_flux(402, E * 4.0)
+        n_0 += 2.0**2 * self.nucleus_flux(402, E * 4.0)
 
-        p_0 += 6.0**2 * nuc_flux(1206, E * 12.0)
-        n_0 += 6.0**2 * nuc_flux(1206, E * 12.0)
+        p_0 += 6.0**2 * self.nucleus_flux(1206, E * 12.0)
+        n_0 += 6.0**2 * self.nucleus_flux(1206, E * 12.0)
 
-        p_0 += 14.0**2 * nuc_flux(2814, E * 28.0)
-        n_0 += 14.0**2 * nuc_flux(2814, E * 28.0)
+        p_0 += 14.0**2 * self.nucleus_flux(2814, E * 28.0)
+        n_0 += 14.0**2 * self.nucleus_flux(2814, E * 28.0)
 
-        p_0 += 26.0**2 * nuc_flux(5426, E * 52.0)
-        n_0 += 26.0**2 * nuc_flux(5426, E * 52.0)
+        a_fe = self.Z_A(5426)[1]
+        p_0 += 26.0**2 * self.nucleus_flux(5426, E * a_fe)
+        n_0 += 26.0**2 * self.nucleus_flux(5426, E * a_fe)
 
         return (p_0 - n_0) / (p_0 + n_0)
 
@@ -266,72 +199,69 @@ class PrimaryFlux(with_metaclass(ABCMeta)):
         The proton fraction is defined as :math:`\\frac{\\Phi_p}{\\Phi_p + \\Phi_n}`.
 
         Args:
-          E (float): laboratory energy of nucleons in GeV
+          E (float or numpy.ndarray): laboratory energy of nucleons in GeV
         Returns:
           (float,float,float): proton fraction, proton flux, neutron flux
         """
-        nuc_flux = np.vectorize(self.nucleus_flux)
         za = self.Z_A
 
         p_flux = sum(
-            [
-                za(corsika_id)[0]
-                * za(corsika_id)[1]
-                * nuc_flux(corsika_id, E * za(corsika_id)[1])
-                for corsika_id in self.nucleus_ids
-            ]
+            za(corsika_id)[0]
+            * za(corsika_id)[1]
+            * self.nucleus_flux(corsika_id, E * za(corsika_id)[1])
+            for corsika_id in self.nucleus_ids
         )
 
         n_flux = sum(
-            [
-                (za(corsika_id)[1] - za(corsika_id)[0])
-                * za(corsika_id)[1]
-                * nuc_flux(corsika_id, E * za(corsika_id)[1])
-                for corsika_id in self.nucleus_ids
-            ]
+            (za(corsika_id)[1] - za(corsika_id)[0])
+            * za(corsika_id)[1]
+            * self.nucleus_flux(corsika_id, E * za(corsika_id)[1])
+            for corsika_id in self.nucleus_ids
         )
 
-        return p_flux / (p_flux + n_flux), p_flux, n_flux
+        total = p_flux + n_flux
+        p_frac = np.where(total > 0, p_flux / total, 0.0)
+        return p_frac, p_flux, n_flux
 
     def lnA(self, E):
-        """Returns mean logarithmic mass <ln A>/
+        """Returns mean logarithmic mass <ln A>.
 
         Args:
-          E (float): laboratory energy of particles in GeV
+          E (float or numpy.ndarray): laboratory energy of particles in GeV
         Returns:
-          (float): mean (natural) logarithmic mass
+          (numpy.ndarray): mean (natural) logarithmic mass
         """
         sum_weight = 0.0
 
-        nuc_flux = np.vectorize(self.nucleus_flux)
         for cid in self.nucleus_ids:
             if cid == 14:
                 continue  # p has lnA = 0
-            sum_weight += np.log(self.Z_A(cid)[1]) * nuc_flux(cid, E)
+            sum_weight += np.log(self.Z_A(cid)[1]) * self.nucleus_flux(cid, E)
 
         return sum_weight / self.total_flux(E)
 
     def _find_nearby_id(self, corsika_id, delta_A=3):
-        """Looks in :attr:`self.params` for a nucleus with same ``corsika_id`` and returns
-        the corsika_id if these parameters exist. If not, it will look for nuclei of
-        mass number +- delta_A around the requested nucleus and return its corsika_id
-        if it exists.
+        """Looks in :attr:`self.params` for a nucleus with same ``corsika_id``
+        and returns the corsika_id if these parameters exist. If not, it will
+        look for nuclei of mass number +- delta_A around the requested nucleus
+        and return its corsika_id if it exists.
 
         Args:
           corsika_id (int): corsika id of nucleus/mass group
+          delta_A (int): maximum mass number difference to accept
         Returns:
           (int): corsika_id of requested or similar nucleus
         Raises:
-          Exception: if no nucleus with mass number closer than delta_A can be found
-           in parameters
+          Exception: if no nucleus with mass number closer than delta_A can
+            be found in parameters
         """
         if corsika_id in self.nucleus_ids:
             return corsika_id
 
-        A_in = (corsika_id - corsika_id % 100) / 100
-        closest_id = _get_closest(corsika_id, self.nucleus_ids)[1]
-        A_close = (closest_id - closest_id % 100) / 100
-        if np.abs(A_in - A_close) > 3:
+        A_in = (corsika_id - corsika_id % 100) // 100
+        closest_id = _get_closest(corsika_id, np.array(self.nucleus_ids))[1]
+        A_close = (closest_id - closest_id % 100) // 100
+        if np.abs(A_in - A_close) > delta_A:
             e = (
                 "{0}::_find_nearby_id(): No similar nucleus found with "
                 + "delta_A <= {1} for A_in = {2}. Closest is {3}."
@@ -341,26 +271,26 @@ class PrimaryFlux(with_metaclass(ABCMeta)):
             return closest_id
 
     def Z_A(self, corsika_id):
-        """Returns mass number :math:`A` and charge :math:`Z` corresponding
+        """Returns charge :math:`Z` and mass number :math:`A` corresponding
         to ``corsika_id``
 
         Args:
           corsika_id (int): corsika id of nucleus/mass group
         Returns:
-          (int,int): (Z,A) tuple
+          (int,int): (Z, A) tuple
         """
         Z, A = 1, 1
         if corsika_id > 14:
             Z = corsika_id % 100
-            A = (corsika_id - Z) / 100
+            A = (corsika_id - Z) // 100
         return Z, A
 
 
 class PolyGonato(PrimaryFlux):
     """J. R. Hoerandel, Astroparticle Physics 19, 193 (2003)."""
 
-    def __init__(self, constdelta=False):
-        PrimaryFlux.__init__(self)
+    def __init__(self, constdelta=False, **kwargs):
+        super().__init__(**kwargs)
 
         self.name = "poly-gonato"
         self.sname = "pg"
@@ -389,12 +319,11 @@ class PolyGonato(PrimaryFlux):
 
         self.nucleus_ids = list(self.params.keys())
 
-    def nucleus_flux(self, corsika_id, E):
+    def _nucleus_flux(self, corsika_id, E):
         corsika_id = self._find_nearby_id(corsika_id)
+        return self._polygonato_formula(corsika_id, E)
 
-        return self._polygonato_fomula(corsika_id, E)
-
-    def _polygonato_fomula(self, corsika_id, E):
+    def _polygonato_formula(self, corsika_id, E):
         p = self.params[corsika_id]
         gam = (self.gamma_c + p[1]) if self.constdelta else -self.delta_gamma
 
@@ -413,6 +342,9 @@ class _BenzviMontaruli(PrimaryFlux):
     """
 
     def __init__(self, *args, **kwargs):
+        super().__init__(
+            **{k: v for k, v in kwargs.items() if k == "geomagnetic_cutoff"}
+        )
         self.name = "Benzvi-Montaruli"
         self.sname = "BM"
         self.params = {}
@@ -427,32 +359,23 @@ class _BenzviMontaruli(PrimaryFlux):
 
         self.nucleus_ids = list(self.params.keys())
 
-    def nucleus_flux(self, corsika_id, E):
+    def _nucleus_flux(self, corsika_id, E):
         corsika_id = self._find_nearby_id(corsika_id)
+        return self._benzvi_flux(corsika_id, E)
 
-        return self.BenzviFlux(corsika_id, E)
-
-    def BenzviFlux(self, corsika_id, E):
-
+    def _benzvi_flux(self, corsika_id, E):
         param = self.params[corsika_id]
-        try:
-            if E < param[3]:
-                return param[1] * (E / param[0]) ** param[2]
-            else:
-                return (
-                    param[1]
-                    * (param[3] / param[0]) ** (param[2] - param[4])
-                    * (E / param[0]) ** param[4]
-                )
-        except:
-            return np.hstack(
-                [
-                    param[1] * (E[E < param[3]] / param[0]) ** param[2],
-                    param[1]
-                    * (param[3] / param[0]) ** (param[2] - param[4])
-                    * (E[E >= param[3]] / param[0]) ** param[4],
-                ]
-            )
+        E = np.atleast_1d(np.asarray(E, dtype=float))
+        result = np.empty_like(E)
+        lo = E < param[3]
+        hi = ~lo
+        result[lo] = param[1] * (E[lo] / param[0]) ** param[2]
+        result[hi] = (
+            param[1]
+            * (param[3] / param[0]) ** (param[2] - param[4])
+            * (E[hi] / param[0]) ** param[4]
+        )
+        return result
 
 
 class HillasGaisser2012(PrimaryFlux):
@@ -467,7 +390,8 @@ class HillasGaisser2012(PrimaryFlux):
       model (str): can be either H3a or H4a.
     """
 
-    def __init__(self, model="H4a"):
+    def __init__(self, model="H4a", **kwargs):
+        super().__init__(**kwargs)
 
         self.name = "Hillas-Gaisser (" + model + ")"
         self.sname = model
@@ -513,7 +437,7 @@ class HillasGaisser2012(PrimaryFlux):
 
         self.nucleus_ids = list(self.params.keys())
 
-    def nucleus_flux(self, corsika_id, E):
+    def _nucleus_flux(self, corsika_id, E):
         corsika_id = self._find_nearby_id(corsika_id)
 
         flux = 0.0
@@ -539,8 +463,8 @@ class H3a_polygonato(HillasGaisser2012):
       model (str): can be either H3a or H4a.
     """
 
-    def __init__(self, model="H3a"):
-        HillasGaisser2012.__init__(self, model)
+    def __init__(self, model="H3a", **kwargs):
+        super().__init__(model, **kwargs)
         self.rid_cutoff[1] = 4.49e6
         self.rid_cutoff[2] = 30e6
         self.rid_cutoff[3] = 2e9
@@ -562,15 +486,16 @@ class GaisserStanevTilav(PrimaryFlux):
 
     Args:
       model (str): 3-gen or 4-gen
-      include_heavy_in_total (bool, optional): if True, the total flux will include the
-        heavy component groups (Te, Hg) as well. Default is False for legacy compatibility.
+      include_heavy_in_total (bool, optional): if True, the total flux will
+        include the heavy component groups (Te, Hg) as well. Default is
+        False for legacy compatibility.
 
     Raises:
       Exception: if ``model`` not properly specified.
     """
 
-    def __init__(self, model="3-gen", include_heavy_in_total=False):
-        PrimaryFlux.__init__(self)
+    def __init__(self, model="3-gen", include_heavy_in_total=False, **kwargs):
+        super().__init__(**kwargs)
 
         self.name = "GST (" + model + ")"
         self.sname = "GST" + model[0]
@@ -632,8 +557,8 @@ class GaisserStanevTilav(PrimaryFlux):
             self.params[1206][4] = (0, 0, 6)  # CNO
             self.params[1608][4] = (0, 0, 8)  # O
             self.params[5426][4] = (0, 0, 26)  # Fe
-            self.params[12852][3] = (0, 1.0, 52)  # Te
-            self.params[20180][3] = (0, 1.0, 80)  # Hg
+            self.params[12852][4] = (0, 1.0, 52)  # Te
+            self.params[20180][4] = (0, 1.0, 80)  # Hg
         else:
             raise Exception("GaisserStanevTilav(): Unknown model version.")
         if include_heavy_in_total:
@@ -643,7 +568,7 @@ class GaisserStanevTilav(PrimaryFlux):
                 k for k in self.params.keys() if k not in [12852, 20180]
             ]
 
-    def nucleus_flux(self, corsika_id, E):
+    def _nucleus_flux(self, corsika_id, E):
         corsika_id = self._find_nearby_id(corsika_id)
 
         flux = 0.0
@@ -663,20 +588,21 @@ class GaisserStanevTilav(PrimaryFlux):
 
 
 class CombinedGHandHG(PrimaryFlux):
-    """A. Fedynitch, J. Becker Tjus, and P. Desiati, Phys. Rev. D 86, 114024 (2012).
+    """A. Fedynitch, J. Becker Tjus, and P. Desiati,
+    Phys. Rev. D 86, 114024 (2012).
 
-    In the paper the high energy models were called cHGm for GH+H3a and cHGp for GH+H4a.
-    The names have been change to use the quite unintuitive names H3a and H4a in
-    ongoing literature.
-
+    In the paper the high energy models were called cHGm for GH+H3a
+    and cHGp for GH+H4a. The names have been changed to use the quite
+    unintuitive names H3a and H4a in ongoing literature.
     """
 
-    def __init__(self, model="H3a"):
+    def __init__(self, model="H3a", **kwargs):
+        super().__init__(**kwargs)
         self.name = "comb. GH and " + model
         self.sname = "c" + model
         self.params = {}
-        self.leModel = GaisserHonda()
-        self.heModel = HillasGaisser2012(model)
+        self.leModel = GaisserHonda(**kwargs)
+        self.heModel = HillasGaisser2012(model, **kwargs)
         self.heCutOff = 1e5
         cid_list = [14, 402, 1206, 2814, 5426]
 
@@ -689,33 +615,24 @@ class CombinedGHandHG(PrimaryFlux):
         from scipy.optimize import fsolve
 
         def func(logE):
-            return self.leModel.nucleus_flux(
-                corsika_id, 10**logE
-            ) - self.heModel.nucleus_flux(corsika_id, 10**logE)
+            return self.leModel._nucleus_flux(
+                corsika_id, np.atleast_1d(10**logE)
+            ) - self.heModel._nucleus_flux(corsika_id, np.atleast_1d(10**logE))
 
         result = fsolve(func, 3.1)
-        # print 'CombinedSpectrum(): low E to high E model transition for',
-        # corsika_id, 10 ** result[0]
         return 10 ** result[0]
 
-    def nucleus_flux(self, corsika_id, E):
+    def _nucleus_flux(self, corsika_id, E):
         corsika_id = self._find_nearby_id(corsika_id)
-
-        try:
-            E = np.array(E)
-            le = E < self.params[corsika_id]
-            he = E >= self.params[corsika_id]
-            return np.hstack(
-                (
-                    self.leModel.nucleus_flux(corsika_id, E[le]),
-                    self.heModel.nucleus_flux(corsika_id, E[he]),
-                )
-            )
-        except IndexError:
-            if E < self.params[corsika_id]:
-                return self.leModel.nucleus_flux(corsika_id, E)
-            else:
-                return self.heModel.nucleus_flux(corsika_id, E)
+        E = np.atleast_1d(np.asarray(E, dtype=float))
+        result = np.empty_like(E)
+        lo = E < self.params[corsika_id]
+        hi = ~lo
+        if np.any(lo):
+            result[lo] = self.leModel._nucleus_flux(corsika_id, E[lo])
+        if np.any(hi):
+            result[hi] = self.heModel._nucleus_flux(corsika_id, E[hi])
+        return result
 
 
 class ZatsepinSokolskaya(PrimaryFlux):
@@ -723,17 +640,18 @@ class ZatsepinSokolskaya(PrimaryFlux):
     Astronomy and Astrophysics 458, 1 (2006).
 
     Later, the PAMELA experiment has fitted the parameters of this model
-    to their data in PAMELA Collaboration, O. Adriani et al., Science 332, 69 (2011).
-    Both versions of parameters can be accessed here.
+    to their data in PAMELA Collaboration, O. Adriani et al.,
+    Science 332, 69 (2011). Both versions of parameters can be accessed here.
 
-    The model does not describe the flux above the knee. Therefore, the highest energies
-    should not exceed 1-10 PeV.
+    The model does not describe the flux above the knee. Therefore, the
+    highest energies should not exceed 1-10 PeV.
 
     Args:
       model (str): 'default' for original or 'pamela' for PAMELA parameters
     """
 
-    def __init__(self, model="pamela"):
+    def __init__(self, model="pamela", **kwargs):
+        super().__init__(**kwargs)
         if model == "pamela":
             self.name = "Zatsepin-Sokolskaya/Pamela"
             self.sname = "ZSP"
@@ -766,9 +684,7 @@ class ZatsepinSokolskaya(PrimaryFlux):
             self.m_p = 0.983
         else:
             raise Exception(
-                "{0}():: Unknown model selection '{1}'.".format(
-                    self.__class__.__name__, model
-                )
+                f"{self.__class__.__name__}():: Unknown model selection '{model}'."
             )
         self.nucleus_ids = list(self.f_norm.keys())
 
@@ -781,7 +697,6 @@ class ZatsepinSokolskaya(PrimaryFlux):
         return R ** (-self.alpha[gen]) * self.phi(R, gen)
 
     def phi(self, R, gen):
-
         return (1 + (R / self.R_max[gen]) ** 2) ** (
             (self.gamma[gen] - self.gamma_k[gen]) / 2.0
         )
@@ -825,21 +740,17 @@ class ZatsepinSokolskaya(PrimaryFlux):
             )
         return flux
 
-    def nucleus_flux(self, corsika_id, E):
+    def _nucleus_flux(self, corsika_id, E):
         corsika_id = self._find_nearby_id(corsika_id)
-
-        try:
-            le = E < 300
-            he = E >= 300
-            return np.hstack(
-                (self.f_mod(E[le], corsika_id), self.flux(E[he], corsika_id))
-            )
-
-        except:
-            if E < 300:
-                return self.f_mod(E, corsika_id)
-            else:
-                return self.flux(E, corsika_id)
+        E = np.atleast_1d(np.asarray(E, dtype=float))
+        result = np.empty_like(E)
+        lo = E < 300
+        hi = ~lo
+        if np.any(lo):
+            result[lo] = self.f_mod(E[lo], corsika_id)
+        if np.any(hi):
+            result[hi] = self.flux(E[hi], corsika_id)
+        return result
 
 
 class GaisserHonda(PrimaryFlux):
@@ -852,7 +763,7 @@ class GaisserHonda(PrimaryFlux):
     """
 
     def __init__(self, *args, **kwargs):
-
+        super().__init__(geomagnetic_cutoff=kwargs.pop("geomagnetic_cutoff", None))
         self.name = "Gaisser-Honda"
         self.sname = "GH"
         self.params = {}
@@ -863,7 +774,7 @@ class GaisserHonda(PrimaryFlux):
         self.params[5426] = (2.68, 4.45, 3.07, 0.41)
         self.nucleus_ids = list(self.params.keys())
 
-    def nucleus_flux(self, corsika_id, E):
+    def _nucleus_flux(self, corsika_id, E):
         corsika_id = self._find_nearby_id(corsika_id)
         A = self.Z_A(corsika_id)[1]
 
@@ -879,15 +790,17 @@ class Thunman(PrimaryFlux):
     """Popular broken power-law flux model.
 
     The parameters of this model are taken from the prompt flux calculation
-    paper by M. Thunman, G. Ingelman, and P. Gondolo, Astroparticle Physics 5, 309 (1996).
-    The model contians only protons with a power-law index of -2.7 below the knee,
-    located at 5 PeV, and -3.0 for energies higher than that.
+    paper by M. Thunman, G. Ingelman, and P. Gondolo,
+    Astroparticle Physics 5, 309 (1996).
+    The model contains only protons with a power-law index of -2.7 below
+    the knee, located at 5 PeV, and -3.0 for energies higher than that.
     """
 
     name = "Thunman et al. ('96)"
     sname = "TIG"
 
     def __init__(self, *args, **kwargs):
+        super().__init__(geomagnetic_cutoff=kwargs.pop("geomagnetic_cutoff", None))
         self.params = {}
         self.params["low_e"] = (1e4 * 1.7, -2.7)
         self.params["high_e"] = (1e4 * 174, -3.0)
@@ -895,27 +808,18 @@ class Thunman(PrimaryFlux):
 
         self.nucleus_ids = [14]
 
-    def nucleus_flux(self, corsika_id, E):
+    def _nucleus_flux(self, corsika_id, E):
         """Broken power law spectrum for protons."""
-        E = np.atleast_1d(E)
+        E = np.atleast_1d(np.asarray(E, dtype=float))
         if corsika_id != 14:
             return np.zeros_like(E)
 
         le = E < self.params["trans"]
-        he = E >= self.params["trans"]
-        return np.hstack(
-            (
-                self.params["low_e"][0] * E[le] ** self.params["low_e"][1],
-                self.params["high_e"][0] * E[he] ** self.params["high_e"][1],
-            )
-        )
-
-        #     self.flux(E[he], corsika_id)))
-
-        # if np.atleast_1d(E) < self.params["trans"]:
-        #     return self.params['low_e'][0] * E**(self.params['low_e'][1])
-        # else:
-        #     return self.params['high_e'][0] * E**(self.params['high_e'][1])
+        he = ~le
+        result = np.empty_like(E)
+        result[le] = self.params["low_e"][0] * E[le] ** self.params["low_e"][1]
+        result[he] = self.params["high_e"][0] * E[he] ** self.params["high_e"][1]
+        return result
 
 
 class SimplePowerlaw27(PrimaryFlux):
@@ -927,156 +831,21 @@ class SimplePowerlaw27(PrimaryFlux):
     sname = r"$E^{-2.7}$"
 
     def __init__(self, *args, **kwargs):
+        super().__init__(geomagnetic_cutoff=kwargs.pop("geomagnetic_cutoff", None))
         self.params = (1e4 * 1.7, -2.7)
         self.nucleus_ids = [14]
 
-    def nucleus_flux(self, corsika_id, E):
+    def _nucleus_flux(self, corsika_id, E):
+        E = np.atleast_1d(np.asarray(E, dtype=float))
         if corsika_id != 14:
-            return 0.0
+            return np.zeros_like(E)
 
         return self.params[0] * E ** (self.params[1])
 
 
-class GlobalSplineFit(PrimaryFlux):
-    """Data-driven fit of direct and indirect measurements of the
-    cosmic ray flux and composition. Tracks the mass composition using
-    four leading elements (p, He, O, Fe), whose flux is modeled by shaped
-    spline functions. Assumes fixed flux ratios in rigidity for the flux
-    of subleading elements. Covers the whole rigidity range from
-    10 GV to 10^11 GeV.
-    """
-
-    name = "Dembinski et al. (2017)"
-    sname = "GSF"
-
-    def __init__(self, *args, **kwargs):
-        from gsf.flux import z_to_a
-
-        self.time_interval = (200901, 201612)
-        self.nucleus_ids = [
-            int(round(a)) * 100 + int(z) for (z, a) in list(z_to_a.items())
-        ]
-
-    def nucleus_flux(self, corsika_id, E):
-        """Returns the flux of nuclei corresponding to
-        the ``corsika_id`` at energy ``E``.
-
-        Args:
-          corsika_id (int): see :mod:`crflux` for description.
-          E (float): laboratory energy of nucleus in GeV
-        Returns:
-          (float): flux of single nucleus type :math:`\\Phi_{nucleus}`
-          in :math:`(\\text{m}^2 \\text{s sr GeV})^{-1}`
-        """
-        from gsf.flux import eflux
-
-        z, a = self.Z_A(corsika_id)
-        return eflux(z, E, time_interval=self.time_interval)
-
-    def p_and_n_flux(self, E):
-        """Returns tuple with proton fraction, proton flux and neutron flux.
-
-        The proton fraction is defined as :math:`\\frac{\\Phi_p}{\\Phi_p + \\Phi_n}`.
-
-        Args:
-          E (float): laboratory energy of nucleons in GeV
-        Returns:
-          (float,float,float): proton fraction, proton flux, neutron flux
-        """
-        from gsf.flux import nucleon_flux
-
-        pnflux = [
-            nucleon_flux(Z_leading, E, time_interval=self.time_interval)
-            for Z_leading in [1, 2, 8, 26]
-        ]
-        p_flux, n_flux = np.sum(pnflux, axis=0)
-        return p_flux / (p_flux + n_flux), p_flux, n_flux
-
-    def total_flux(self, E):
-        """Returns total flux of nuclei, the "all-particle-flux".
-
-        This version of the method does not vectorize the nucleus_flux method.
-
-        Args:
-          E (float): laboratory energy of particles in GeV
-        Returns:
-          (float): particle flux in :math:`\\Phi_{particles}` in
-          :math:`(\\text{m}^2 \\text{s sr GeV})^{-1}`
-        """
-
-        return sum(
-            [self.nucleus_flux(corsika_id, E) for corsika_id in self.nucleus_ids]
-        )
-
-    def lnA(self, E):
-        """Returns mean logarithmic mass <ln A>/
-
-        This version of the method does not vectorize the nucleus_flux method.
-
-        Args:
-          E (float): laboratory energy of particles in GeV
-        Returns:
-          (float): mean (natural) logarithmic mass
-        """
-        sum_weight = 0.0
-        for cid in self.nucleus_ids:
-            if cid == 14:
-                continue  # p has lnA = 0
-            sum_weight += np.log(self.Z_A(cid)[1]) * self.nucleus_flux(cid, E)
-
-        return sum_weight / self.total_flux(E)
-
-    def dump_nucleon_flux_splines(self, emin=1.0, emax=1e12, nbins=1000):
-        """Dumps a nucleon flux splines of the full GSF model to a pickled file.
-
-        Energy and flux coordiante are interpolated as a natural logarithm of
-        the values.
-
-        Args:
-          emin (float): minimal energy for the spline range
-          emax (float): maximal energy for the spline range
-          nbins (int): number of energy steps for interpolation
-        """
-        from scipy.interpolate import UnivariateSpline
-        from bz2 import BZ2File
-        from datetime import date
-        import pickle as pickle
-
-        egrid = np.logspace(np.log10(emin), np.log10(emax), nbins)
-        p_frac, p_flux, n_flux = self.p_and_n_flux(egrid)
-        p_frac[p_frac < 0.0] = 0.0
-        p_flux[p_flux < 0.0] = 1e-300
-        n_flux[n_flux < 0.0] = 1e-300
-        opts = {"s": 0, "ext": 1}
-        p_frac_spl = UnivariateSpline(np.log(egrid), p_frac, **opts)
-        p_flux_spl = UnivariateSpline(np.log(egrid), np.log(p_flux), **opts)
-        n_flux_spl = UnivariateSpline(np.log(egrid), np.log(n_flux), **opts)
-
-        pickle.dump(
-            (p_frac_spl, p_flux_spl, n_flux_spl),
-            BZ2File("GSF_spline_" + date.today().strftime("%Y%m%d") + ".pkl.bz2", "wb"),
-            protocol=-1,
-        )
-
-    # def nucleon_flux_and_uncertainty(self, E, mag):
-    #     from gsf.flux import nucleon_flux, nucleon_flux_cov
-    #     y1 = np.sum(nucleon_flux(1, E), axis=0) * E**mag
-    #     y2 = np.sum(nucleon_flux(2, E), axis=0) * E**mag
-    #     y3 = np.sum(nucleon_flux(8, E), axis=0) * E**mag
-    #     y4 = np.sum(nucleon_flux(26, E), axis=0) * E**mag
-    #     y5 = y1 + y2 + y3 + y4
-
-    #     y1err = np.diag(nucleon_flux_cov(1, 1, E))**0.5 * E**mag
-    #     y2err = np.diag(nucleon_flux_cov(2, 2, E))**0.5 * E**mag
-    #     y3err = np.diag(nucleon_flux_cov(8, 8, E))**0.5 * E**mag
-    #     y4err = np.diag(nucleon_flux_cov(26, 26, E))**0.5 * E**mag
-    #     y5cov = 0.0
-    #     for l1 in (1, 2, 8, 26):
-    #         for l2 in (1, 2, 8, 26):
-    #             y5cov += nucleon_flux_cov(l1, l2, E)
-    #     y5err = np.diag(y5cov)**0.5 * E**mag
-
-    #     return y5, y5err
+# TODO: Replace GlobalSplineFit with new GSF implementation.
+# The original GlobalSplineFit class depended on the unpackaged `gsf` module
+# and has been removed. Use GlobalSplineFitBeta (spline-based) instead.
 
 
 class GlobalSplineFitBeta(PrimaryFlux):
@@ -1091,15 +860,19 @@ class GlobalSplineFitBeta(PrimaryFlux):
     available, when the model is published. The class picks the most recent
     spline file in the current directory.
 
-    Use for reference: Dembinski et al., PoS ICRC2017 533 https://inspirehep.net/literature/1639832
+    Use for reference: Dembinski et al., PoS ICRC2017 533
+    https://inspirehep.net/literature/1639832
     """
 
     name = "Global Spline Fit"
     sname = "GSF"
 
-    def __init__(self, spl_fname=None):
-        import bz2, pickle, os
+    def __init__(self, spl_fname=None, **kwargs):
+        super().__init__(**kwargs)
+        import bz2
+        import os
         import os.path as path
+        import pickle
 
         base_path = path.dirname(path.abspath(__file__))
 
@@ -1117,40 +890,45 @@ class GlobalSplineFitBeta(PrimaryFlux):
                 )
 
             spl_fname = gsf_files[0]
+
             # Find out file datetag
-            fdate = lambda fn: int(
-                os.path.splitext(os.path.splitext(fn)[0])[0].split("_")[-1]
-            )
+            def fdate(fn):
+                return int(os.path.splitext(os.path.splitext(fn)[0])[0].split("_")[-1])
+
             # Pick the latest
             for fn in gsf_files:
                 if fdate(fn) >= fdate(spl_fname):
                     spl_fname = fn
             spl_fname = os.path.join(base_path, spl_fname)
-        try:
-            self.p_frac_spl, self.p_flux_spl, self.n_flux_spl = pickle.load(
-                bz2.BZ2File(spl_fname), encoding="latin1"
-            )
-        except TypeError:
-            self.p_frac_spl, self.p_flux_spl, self.n_flux_spl = pickle.load(
-                bz2.BZ2File(spl_fname)
-            )
+
+        self.p_frac_spl, self.p_flux_spl, self.n_flux_spl = pickle.load(
+            bz2.BZ2File(spl_fname), encoding="latin1"
+        )
 
         self.nucleus_ids = []
 
     def p_and_n_flux(self, E):
         """Returns tuple with proton fraction, proton flux and neutron flux.
 
-        The proton fraction is defined as :math:`\\frac{\\Phi_p}{\\Phi_p + \\Phi_n}`.
+        The proton fraction is defined as
+        :math:`\\frac{\\Phi_p}{\\Phi_p + \\Phi_n}`.
 
         Args:
-          E (float): laboratory energy of nucleons in GeV
+          E (float or numpy.ndarray): laboratory energy of nucleons in GeV
         Returns:
           (float,float,float): proton fraction, proton flux, neutron flux
         """
+        E = np.atleast_1d(np.asarray(E, dtype=float))
         p_frac = self.p_frac_spl(np.log(E))
-
         p_flux = np.exp(self.p_flux_spl(np.log(E)))
         n_flux = np.exp(self.n_flux_spl(np.log(E)))
+
+        if self.geomagnetic_cutoff is not None:
+            # For nucleon fluxes, apply proton cutoff (Z=1, A=1)
+            E_cut = self.geomagnetic_cutoff
+            mask = E >= E_cut
+            p_flux = np.where(mask, p_flux, 0.0)
+            n_flux = np.where(mask, n_flux, 0.0)
 
         return p_frac, p_flux, n_flux
 
@@ -1158,15 +936,14 @@ class GlobalSplineFitBeta(PrimaryFlux):
         """Returns total flux of nucleons, the "all-nucleon-flux".
 
         Args:
-          E (float): laboratory energy of nucleons in GeV
+          E (float or numpy.ndarray): laboratory energy of nucleons in GeV
         Returns:
-          (float): nucleon flux :math:`\\Phi_{nucleons}` in
+          (numpy.ndarray): nucleon flux :math:`\\Phi_{nucleons}` in
           :math:`(\\text{m}^2 \\text{s sr GeV})^{-1}`
         """
         return np.sum(self.p_and_n_flux(E)[1:], axis=0)
 
-    def nucleus_flux(self, corsika_id, E):
-        """Dummy function, since for particle fluxes are not supported
-        in the spline interface version"""
-
+    def _nucleus_flux(self, corsika_id, E):
+        """Dummy function, since particle fluxes are not supported
+        in the spline interface version."""
         return np.zeros_like(E)

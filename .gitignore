@@ -1,6 +1,13 @@
 *.pyc
+__pycache__/
+*.egg-info/
+dist/
+build/
 *.ipynb
 .ipynb*
 gsf
 .vscode
-crflux.egg-info
+.pytest_cache/
+.ruff_cache/
+site/
+.coverage
