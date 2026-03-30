@@ -27,7 +27,7 @@ dependencies = ["numpy", "scipy"]
 
 [project.optional-dependencies]
 test = ["pytest", "pytest-cov", "matplotlib"]
-docs = ["mkdocs-material", "mkdocstrings[python]"]
+docs = ["mkdocs>=1.6,<2", "mkdocs-material", "mkdocstrings[python]"]
 
 [project.urls]
 Homepage = "https://github.com/mceq-project/crflux"
