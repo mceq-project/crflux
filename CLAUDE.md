@@ -37,6 +37,8 @@ GitHub Actions (`.github/workflows/tests.yml`) runs on push/PR to `main`:
 
 Docs auto-deploy to gh-pages on push to `main` (`.github/workflows/docs.yml`).
 
+PyPI publish triggers on GitHub releases (`.github/workflows/publish.yml`), using the `PYPI_API_TOKEN` secret.
+
 ## Dependencies
 
 Runtime: numpy, scipy. Tests: pytest, pytest-cov, matplotlib. Docs: mkdocs (<2), mkdocs-material, mkdocstrings.
