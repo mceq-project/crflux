@@ -30,8 +30,8 @@ test = ["pytest", "pytest-cov", "matplotlib"]
 docs = ["mkdocs-material", "mkdocstrings[python]"]
 
 [project.urls]
-Homepage = "https://github.com/afedynitch/crflux"
-Documentation = "https://afedynitch.github.io/crflux"
+Homepage = "https://github.com/mceq-project/crflux"
+Documentation = "https://mceq-project.github.io/crflux"
 
 [tool.setuptools.packages.find]
 include = ["crflux*"]

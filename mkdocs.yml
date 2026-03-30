@@ -1,7 +1,7 @@
 site_name: crflux
 site_description: Parameterizations of the cosmic ray flux at Earth
-site_url: https://afedynitch.github.io/crflux
-repo_url: https://github.com/afedynitch/crflux
+site_url: https://mceq-project.github.io/crflux
+repo_url: https://github.com/mceq-project/crflux
 
 theme:
   name: material

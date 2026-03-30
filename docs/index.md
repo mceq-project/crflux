@@ -37,4 +37,4 @@ A. Fedynitch, J. Becker Tjus, and P. Desiati, Phys. Rev. D 86, 114024 (2012).
 
 ## License
 
-[MIT License](https://github.com/afedynitch/crflux/blob/master/LICENSE)
+[MIT License](https://github.com/afedynitch/crflux/blob/main/LICENSE)

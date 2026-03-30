@@ -4,6 +4,32 @@ All models inherit from `PrimaryFlux` and implement the same interface.
 They accept an optional `geomagnetic_cutoff` parameter (in GV) that zeros
 the flux below the corresponding rigidity for each nucleus.
 
+## Model Comparison
+
+### Nucleon Flux
+
+All-nucleon flux (proton + neutron) scaled by $E^{2.5}$ for visibility across the full energy range.
+
+![Nucleon flux comparison](img/nucleon_flux.png)
+
+### All-Particle Flux
+
+Total flux of all nuclei (all-particle spectrum) scaled by $E^{2.5}$.
+
+![Total particle flux comparison](img/total_flux.png)
+
+### Neutron Fraction
+
+Fraction of neutrons in the nucleon flux, showing composition differences between models.
+
+![Neutron fraction](img/neutron_fraction.png)
+
+### Mean Logarithmic Mass
+
+$\langle\ln A\rangle$ as a function of energy per particle. Higher values indicate heavier composition.
+
+![Mean log mass](img/lnA.png)
+
 ## Parameterized Models
 
 | Class | Reference | Energy Range | Notes |
@@ -33,7 +59,9 @@ Protons have ID 14. Composite nuclei: `ID = 100 * A + Z`
 
 ## Geomagnetic Cutoff
 
-All models accept `geomagnetic_cutoff` (in GV) as a constructor parameter:
+All models accept `geomagnetic_cutoff` (in GV) as a constructor parameter.
+For a nucleus with charge $Z$, the energy cutoff is $E_\text{cut} = Z \times R_\text{cut}$ (GeV).
+Flux is zeroed below this energy.
 
 ```python
 import crflux.models as mods
@@ -42,5 +70,6 @@ import crflux.models as mods
 model = mods.HillasGaisser2012("H3a", geomagnetic_cutoff=7.0)
 ```
 
-For a nucleus with charge $Z$, the energy cutoff is $E_\text{cut} = Z \times R_\text{cut}$ (GeV).
-Flux is zeroed below this energy.
+The plot below shows the effect of different cutoff values on the H3a nucleon flux:
+
+![Geomagnetic cutoff effect](img/geomagnetic_cutoff.png)
