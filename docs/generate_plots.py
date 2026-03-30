@@ -64,7 +64,7 @@ def plot_nucleon_flux():
 
 def plot_neutron_fraction():
     nfrac = {}
-    for mclass, moptions, mtitle, color, ls in PMODELS:
+    for mclass, moptions, mtitle, _color, _ls in PMODELS:
         pmod = mclass(moptions)
         pfrac, _p, _n = pmod.p_and_n_flux(evec)
         nfrac[mtitle] = 1 - pfrac
@@ -118,7 +118,7 @@ def plot_total_flux():
 def plot_lnA():
     pmodels_nuc = [m for m in PMODELS if "GSF" not in m[2]]
     lnA = {}
-    for mclass, moptions, mtitle, color, ls in pmodels_nuc:
+    for mclass, moptions, mtitle, _color, _ls in pmodels_nuc:
         pmod = mclass(moptions)
         lnA[mtitle] = pmod.lnA(evec)
 
