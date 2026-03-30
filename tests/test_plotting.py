@@ -1,9 +1,14 @@
-from matplotlib import pyplot as plt
-import crflux.models as mods
 import numpy as np
+import pytest
+
+mpl = pytest.importorskip("matplotlib")
+mpl.use("Agg")
+from matplotlib import pyplot as plt  # noqa: E402
+
+import crflux.models as mods  # noqa: E402
+
 
 def test_plotting():
-    
     pmodels = [
         (mods.GaisserStanevTilav, "3-gen", "GST 3-gen", "b", "--"),
         (mods.GaisserStanevTilav, "4-gen", "GST 4-gen", "b", "-"),
@@ -13,29 +18,29 @@ def test_plotting():
         (mods.HillasGaisser2012, "H4a", "H4a", "r", "-"),
         (mods.PolyGonato, False, "poly-gonato", "m", "-"),
         (mods.Thunman, None, "TIG", "y", "-"),
-        (mods.ZatsepinSokolskaya, 'default', 'ZS', "c", "-"),
-        (mods.ZatsepinSokolskaya, 'pamela', 'ZSP', "c", "--"),
-        (mods.GaisserHonda, None, 'GH', "0.5", "-"),
-        #    (GlobalSplineFit, None, 'GSF', "k", "-"),
-        (mods.GlobalSplineFitBeta, None, 'GSF spl', "k", ":")
+        (mods.ZatsepinSokolskaya, "default", "ZS", "c", "-"),
+        (mods.ZatsepinSokolskaya, "pamela", "ZSP", "c", "--"),
+        (mods.GaisserHonda, None, "GH", "0.5", "-"),
+        (mods.GlobalSplineFitBeta, None, "GSF spl", "k", ":"),
     ]
 
     nfrac = {}
     lnA = {}
     evec = np.logspace(0, 11, 1000)
     plt.figure(figsize=(7.5, 5))
-    plt.title('Cosmic ray nucleon flux (proton + neutron)')
+    plt.title("Cosmic ray nucleon flux (proton + neutron)")
     for mclass, moptions, mtitle, color, ls in pmodels:
-
         pmod = mclass(moptions)
         pfrac, p, n = pmod.p_and_n_flux(evec)
         plt.plot(
-            evec, (p + n) * evec**2.5,
+            evec,
+            (p + n) * evec**2.5,
             color=color,
             ls=ls,
             lw=1.5,
-            label=mtitle)
-        nfrac[mtitle] = (1 - pfrac)
+            label=mtitle,
+        )
+        nfrac[mtitle] = 1 - pfrac
         if isinstance(pmod, mods.GlobalSplineFitBeta):
             continue
         lnA[mtitle] = pmod.lnA(evec)
@@ -48,10 +53,9 @@ def test_plotting():
     plt.ylim([10, 2e4])
     plt.tight_layout()
 
-
     plt.figure(figsize=(7.5, 5))
-    plt.title('Fraction of neutrons relative to protons.')
-    for mclass, moptions, mtitle, color, ls in pmodels:
+    plt.title("Fraction of neutrons relative to protons.")
+    for _mclass, _moptions, mtitle, color, ls in pmodels:
         plt.plot(evec, nfrac[mtitle], color=color, ls=ls, lw=1.5, label=mtitle)
 
     plt.semilogx()
@@ -60,17 +64,15 @@ def test_plotting():
     plt.legend(loc=0, frameon=False, numpoints=1, ncol=2)
     plt.xlim([1, 1e11])
     plt.tight_layout()
-    
-    pmodels = [m for m in pmodels if 'GSF' not in m[2]]
+
+    pmodels = [m for m in pmodels if "GSF" not in m[2]]
     plt.figure(figsize=(7.5, 5))
-    plt.title('Cosmic ray particle flux (all-nuclei).')
+    plt.title("Cosmic ray particle flux (all-nuclei).")
 
     for mclass, moptions, mtitle, color, ls in pmodels:
         pmod = mclass(moptions)
-
         flux = pmod.total_flux(evec)
-        plt.plot(
-            evec, flux * evec**2.5, color=color, ls=ls, lw=1.5, label=mtitle)
+        plt.plot(evec, flux * evec**2.5, color=color, ls=ls, lw=1.5, label=mtitle)
 
     plt.loglog()
     plt.xlabel(r"$E_{particle}$ [GeV]")
@@ -81,8 +83,8 @@ def test_plotting():
     plt.tight_layout()
 
     plt.figure(figsize=(7.5, 5))
-    plt.title('Mean log mass <lnA>.')
-    for mclass, moptions, mtitle, color, ls in pmodels:
+    plt.title("Mean log mass <lnA>.")
+    for _mclass, _moptions, mtitle, color, ls in pmodels:
         plt.plot(evec, lnA[mtitle], color=color, ls=ls, lw=1.5, label=mtitle)
 
     plt.semilogx()
@@ -91,6 +93,4 @@ def test_plotting():
     plt.legend(loc=0, frameon=False, numpoints=1, ncol=2)
     plt.xlim([1, 1e11])
     plt.tight_layout()
-
-    # plt.show()
-
+    plt.close("all")

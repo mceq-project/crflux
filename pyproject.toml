@@ -1,0 +1,54 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "crflux"
+version = "2.0.0"
+description = "Parameterizations of the cosmic ray flux at Earth"
+readme = "README.md"
+license = "MIT"
+requires-python = ">=3.9"
+authors = [
+    {name = "Anatoli Fedynitch", email = "afedynitch@gmail.com"},
+]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Scientific/Engineering :: Physics",
+    "Intended Audience :: Science/Research",
+    "Development Status :: 5 - Production/Stable",
+]
+dependencies = ["numpy", "scipy"]
+
+[project.optional-dependencies]
+test = ["pytest", "pytest-cov", "matplotlib"]
+docs = ["mkdocs-material", "mkdocstrings[python]"]
+
+[project.urls]
+Homepage = "https://github.com/afedynitch/crflux"
+Documentation = "https://afedynitch.github.io/crflux"
+
+[tool.setuptools.packages.find]
+include = ["crflux*"]
+
+[tool.setuptools.package-data]
+crflux = ["GSF_spline_20171007.pkl.bz2"]
+
+[tool.ruff]
+line-length = 88
+target-version = "py39"
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP", "B"]
+ignore = [
+    "E501",  # line too long - handled by formatter
+    "UP031", # printf-style string formatting - existing code style
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

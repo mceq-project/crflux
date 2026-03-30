@@ -1,0 +1,35 @@
+site_name: crflux
+site_description: Parameterizations of the cosmic ray flux at Earth
+site_url: https://afedynitch.github.io/crflux
+repo_url: https://github.com/afedynitch/crflux
+
+theme:
+  name: material
+  palette:
+    scheme: default
+    primary: indigo
+
+nav:
+  - Home: index.md
+  - Models: models.md
+  - API Reference: api.md
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          options:
+            show_source: true
+            show_root_heading: true
+            members_order: source
+
+markdown_extensions:
+  - admonition
+  - pymdownx.arithmatex:
+      generic: true
+  - pymdownx.highlight
+  - pymdownx.superfences
+
+extra_javascript:
+  - https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js
