@@ -187,8 +187,9 @@ class PrimaryFlux(metaclass=ABCMeta):
         p_0 += 14.0**2 * self.nucleus_flux(2814, E * 28.0)
         n_0 += 14.0**2 * self.nucleus_flux(2814, E * 28.0)
 
-        p_0 += 26.0**2 * self.nucleus_flux(5426, E * 52.0)
-        n_0 += 26.0**2 * self.nucleus_flux(5426, E * 52.0)
+        a_fe = self.Z_A(5426)[1]
+        p_0 += 26.0**2 * self.nucleus_flux(5426, E * a_fe)
+        n_0 += 26.0**2 * self.nucleus_flux(5426, E * a_fe)
 
         return (p_0 - n_0) / (p_0 + n_0)
 
@@ -218,7 +219,9 @@ class PrimaryFlux(metaclass=ABCMeta):
             for corsika_id in self.nucleus_ids
         )
 
-        return p_flux / (p_flux + n_flux), p_flux, n_flux
+        total = p_flux + n_flux
+        p_frac = np.where(total > 0, p_flux / total, 0.0)
+        return p_frac, p_flux, n_flux
 
     def lnA(self, E):
         """Returns mean logarithmic mass <ln A>.

@@ -7,6 +7,9 @@ Run from the repository root:
 
 import os
 
+import matplotlib
+
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
 
@@ -142,9 +145,7 @@ def plot_geomagnetic_cutoff():
 
     mod = mods.HillasGaisser2012("H3a")
     _pfrac, p, n = mod.p_and_n_flux(E)
-    ax.plot(
-        E, (p + n) * E**2.5, color="#1f77b4", lw=1.5, label="H3a (no cutoff)"
-    )
+    ax.plot(E, (p + n) * E**2.5, color="#1f77b4", lw=1.5, label="H3a (no cutoff)")
 
     for rcut, color, ls in [
         (5.0, "#d62728", "--"),

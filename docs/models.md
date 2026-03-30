@@ -55,7 +55,7 @@ Protons have ID 14. Composite nuclei: `ID = 100 * A + Z`
 | Helium | 4 | 2 | 402 |
 | Carbon | 12 | 6 | 1206 |
 | Silicon | 28 | 14 | 2814 |
-| Iron | 56 | 26 | 5426 |
+| Iron | 54 | 26 | 5426 |
 
 ## Geomagnetic Cutoff
 

@@ -8,7 +8,7 @@
 
 ## Medium Priority
 
-- [ ] Configure GitHub Pages for documentation at afedynitch.github.io/crflux
+- [ ] Verify GitHub Pages serves correctly at mceq-project.github.io/crflux
 - [ ] Add type hints throughout `crflux/models.py`
 - [ ] Add uncertainty/covariance support for flux models (partial implementation existed in old `GlobalSplineFit`)
 - [ ] Consider solar modulation parameter (related to geomagnetic cutoff feature)

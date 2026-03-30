@@ -1,5 +1,5 @@
 ![PyPI](https://img.shields.io/pypi/v/crflux)
-![Tests](https://github.com/afedynitch/crflux/actions/workflows/tests.yml/badge.svg)
+![Tests](https://github.com/mceq-project/crflux/actions/workflows/tests.yml/badge.svg)
 
 # `crflux.models`:  parameterizations of the Cosmic Ray flux
 
@@ -18,7 +18,7 @@ air-shower cascade research code [MCEq: Matrix Cascade Equations (MCEq)](https:/
 
 ## Documentation
 
-[Documentation](https://afedynitch.github.io/crflux). Please acknowledge the code by citing the paper above.
+[Documentation](https://mceq-project.github.io/crflux). Please acknowledge the code by citing the paper above.
 
 ## Requirements
 
