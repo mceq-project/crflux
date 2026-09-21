@@ -30,3 +30,13 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - run: pip install -e ".[test]"
       - run: pytest --tb=short -q
+
+  gsf:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -e ".[test]" "globalsplinefit @ git+https://github.com/gsf-project/globalsplinefit.git@e36cd51ff48c250b4453d64e15f52372c9c7bbc9"
+      - run: pytest tests/test_gsf_reduced.py -q

@@ -848,6 +848,103 @@ class SimplePowerlaw27(PrimaryFlux):
 # and has been removed. Use GlobalSplineFitBeta (spline-based) instead.
 
 
+class GlobalSplineFitReduced(PrimaryFlux):
+    """Energy-pivot GSF proton/neutron model for atmospheric cascades.
+
+    The optional globalsplinefit dependency supplies the central model and its
+    correlated reduced parameters. Energies are total GeV per nucleon and fluxes
+    are in (m² s sr GeV)^-1, as required by MCEq's primary-model interface.
+    ``theta`` is in relative-flux units, not standard deviations. To vary a
+    component by one sigma, set theta[i] = reduction.sigma[i].
+
+    Parameters
+    ----------
+    version : str
+        Explicit GSF model revision; default is 2026.1.
+    theta : array-like, optional
+        Reduced-model parameter vector; the default is the central flux.
+    reduction : globalsplinefit.ReducedGSF, optional
+        Reuse an existing p/n reduction across many parameter variations.
+    time_interval : tuple or str, optional
+        GSF solar-modulation interval, or "LIS". None uses Solar Cycle 24.
+    basis : str
+        Interpolation basis ("spline" or "hat") when building a reduction.
+
+    Notes
+    -----
+    This reduction represents nucleon fluxes only. Individual nucleus spectra
+    and composition observables are unavailable. Geomagnetic cutoffs should be
+    set on the underlying GSF model before constructing the reduction.
+    """
+
+    def __init__(
+        self,
+        version="2026.1",
+        theta=None,
+        *,
+        reduction=None,
+        time_interval=None,
+        basis="spline",
+    ):
+        super().__init__()
+        if reduction is None:
+            from globalsplinefit import GSFEnergyPerNucleon, ReducedGSF
+
+            reduction = ReducedGSF(
+                GSFEnergyPerNucleon(
+                    version=version, default_time_interval=time_interval
+                ),
+                basis=basis,
+            )
+        elif time_interval is not None or basis != "spline":
+            raise ValueError("Configure time_interval/basis on the supplied reduction")
+        from globalsplinefit import (
+            GSFEnergyPerNucleon,
+            GSFKineticEnergyPerNucleon,
+            ReducedGSF,
+        )
+
+        if not isinstance(reduction, ReducedGSF) or reduction.per_group:
+            raise ValueError("A total proton/neutron ReducedGSF is required")
+        if not isinstance(reduction.model, GSFEnergyPerNucleon) or isinstance(
+            reduction.model, GSFKineticEnergyPerNucleon
+        ):
+            raise ValueError(
+                "MCEq requires total energy per nucleon, not kinetic energy"
+            )
+        self.reduction = reduction
+        self.theta = (
+            np.zeros(reduction.n_params)
+            if theta is None
+            else np.array(theta, dtype=float, copy=True)
+        )
+        if (
+            self.theta.shape != (reduction.n_params,)
+            or not np.isfinite(self.theta).all()
+        ):
+            raise ValueError(
+                f"theta must contain {reduction.n_params} finite components"
+            )
+        self.theta.setflags(write=False)
+        self.name = f"Global Spline Fit {reduction.model.version} reduced"
+        self.sname = f"GSF{reduction.model.version}"
+
+    def _nucleus_flux(self, corsika_id, E):
+        raise NotImplementedError(
+            "ReducedGSF provides only proton/neutron nucleon fluxes"
+        )
+
+    def p_and_n_flux(self, E):
+        energy = np.atleast_1d(np.asarray(E, dtype=float))
+        proton, neutron = self.reduction.flux(energy, self.theta)
+        total = proton + neutron
+        fraction = np.divide(proton, total, out=np.zeros_like(total), where=total > 0)
+        return fraction, proton, neutron
+
+    def tot_nucleon_flux(self, E):
+        return np.sum(self.p_and_n_flux(E)[1:], axis=0)
+
+
 class GlobalSplineFitBeta(PrimaryFlux):
     """Data-driven fit of direct and indirect measurements of the
     cosmic ray flux and composition. Tracks the mass composition using
