@@ -73,3 +73,34 @@ model = mods.HillasGaisser2012("H3a", geomagnetic_cutoff=7.0)
 The plot below shows the effect of different cutoff values on the H3a nucleon flux:
 
 ![Geomagnetic cutoff effect](img/geomagnetic_cutoff.png)
+
+## GSF 2026 reduced nucleon model
+
+`GlobalSplineFitReduced` adapts the optional `globalsplinefit` package's
+energy-pivot proton/neutron model to the `PrimaryFlux` / MCEq interface.
+Install the `gsf` extra, or install the maintained globalsplinefit checkout.
+
+```python
+from crflux.models import GlobalSplineFitReduced
+import numpy as np
+
+central = GlobalSplineFitReduced(version="2026.1")
+red = central.reduction
+# Parameters are relative-flux deviations; retain their full covariance.
+theta = np.zeros(red.n_params)
+theta[3] = 0.05 * red.sigma[3]
+varied = GlobalSplineFitReduced(reduction=red, theta=theta)
+fraction, proton, neutron = varied.p_and_n_flux(np.logspace(0, 8, 50))
+```
+
+The default uses the published 24-parameter p/n pivot grid and Solar Cycle 24
+modulation average. Energies are total GeV per nucleon; the adapter does not
+rescale the package's flux units. For a different time interval or a rigidity
+cutoff, construct the GSF reduction with those settings first. A reduced model
+has no individual-nucleus or composition prediction. Kinetic-energy reductions
+are rejected to prevent a silent energy-convention mismatch.
+
+The development GSF 2026.1 dependency currently requires maintainer access to
+`gsf-project/globalsplinefit`. Run `pytest tests/test_gsf_reduced.py -q` in an
+environment with that dependency installed. Public CI skips these optional
+integration tests until the GSF package is publicly installable.

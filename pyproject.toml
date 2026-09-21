@@ -26,6 +26,7 @@ classifiers = [
 dependencies = ["numpy", "scipy"]
 
 [project.optional-dependencies]
+gsf = ["globalsplinefit>=2.0.0a1"]
 test = ["pytest", "pytest-cov", "matplotlib"]
 docs = ["mkdocs>=1.6,<2", "mkdocs-material", "mkdocstrings[python]"]
 
