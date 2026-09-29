@@ -43,7 +43,9 @@ $\langle\ln A\rangle$ as a function of energy per particle. Higher values indica
 | `GaisserHonda` | Gaisser & Honda, ARNPS 52, 153 (2002) | < 100 TeV | Tuned to balloon data |
 | `Thunman` | Thunman et al., Astropart. Phys. 5, 309 (1996) | Full range | Proton-only broken power law |
 | `SimplePowerlaw27` | Based on Thunman | Below knee | Proton-only $E^{-2.7}$ |
-| `GlobalSplineFitBeta` | Dembinski et al., PoS ICRC2017 533 | 10 GV - $10^{11}$ GeV | Spline-based, nucleon flux only |
+| `GlobalSplineFit` | Fedynitch et al., arXiv:2609.32649 (2026) | 1 GeV - $10^{11}$ GeV | Via globalsplinefit (`gsf` extra); all species, versions 2026.1/2025/2019/2017 |
+| `GlobalSplineFitReduced` | Fedynitch et al., arXiv:2609.32649 (2026) | 1 GeV - $10^{11}$ GeV | Nucleon flux only, pivot uncertainty parameters |
+| `GlobalSplineFitBeta` | Dembinski et al., PoS ICRC2017 533 | 10 GV - $10^{11}$ GeV | Deprecated: GSF 2017 nucleon flux at φ = 554 MV |
 
 ## Nucleus ID Scheme (CORSIKA)
 
@@ -73,3 +75,37 @@ model = mods.HillasGaisser2012("H3a", geomagnetic_cutoff=7.0)
 The plot below shows the effect of different cutoff values on the H3a nucleon flux:
 
 ![Geomagnetic cutoff effect](img/geomagnetic_cutoff.png)
+
+## Global Spline Fit (GSF)
+
+`GlobalSplineFit` wraps [globalsplinefit](https://github.com/gsf-project/globalsplinefit)
+as a `PrimaryFlux`: per-nucleus fluxes for every species of the chosen version
+(CORSIKA ids, 201 = deuterium where carried) and exact proton/neutron nucleon
+fluxes. `GlobalSplineFitReduced` is its nucleon-only special case with the
+uncertainty as relative-flux parameters at pivot energies (`ReducedGSF`).
+Install with `pip install "crflux[gsf]"` (Python >= 3.10). Reference:
+A. Fedynitch, K. Fujisue, H. Dembinski, R. Engel,
+[arXiv:2609.32649](https://arxiv.org/abs/2609.32649) (2026).
+
+```python
+from crflux.models import GlobalSplineFit, GlobalSplineFitReduced
+import numpy as np
+
+gsf = GlobalSplineFit(version="2026.1")  # also "2025", "2019", "2017"
+gsf.nucleus_flux(5626, 1e6)  # iron, total energy per nucleus
+gsf.gsf.error(np.logspace(3, 6, 4), "Fe*")  # underlying globalsplinefit model
+
+central = GlobalSplineFitReduced(version="2026.1")
+red = central.reduction
+theta = np.zeros(red.n_params)
+theta[3] = red.sigma[3]  # +1 sigma on pivot 3
+varied = GlobalSplineFitReduced(reduction=red, theta=theta)
+fraction, proton, neutron = varied.p_and_n_flux(np.logspace(0, 8, 50))
+```
+
+Energies are total GeV (per nucleus for `nucleus_flux`, per nucleon for
+`p_and_n_flux`). `time_interval` selects the solar-modulation period (default
+Solar Cycle 24, `"LIS"` for none). `geomagnetic_cutoff` is applied by
+globalsplinefit per species in rigidity. Kinetic-energy reductions are rejected.
+`GlobalSplineFitBeta` is deprecated: its table is GSF 2017 at a fixed
+φ = 554 MV, i.e. `GlobalSplineFit(version="2017", time_interval=(199807, 199808))`.
