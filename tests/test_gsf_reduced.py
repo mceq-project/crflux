@@ -32,3 +32,21 @@ def test_reject_kinetic_energy_and_bad_theta():
     red = gsf.ReducedGSF()
     with pytest.raises(ValueError, match="finite components"):
         GlobalSplineFitReduced(reduction=red, theta=[0])
+
+
+def test_beta_is_gsf2017_at_july_1998():
+    from importlib.metadata import version
+
+    if tuple(int(x) for x in version("globalsplinefit").split(".")[:3]) < (2, 0, 1):
+        pytest.skip("globalsplinefit < 2.0.1 ships a different '2017' set")
+    from crflux.models import GlobalSplineFitBeta
+
+    with pytest.warns(DeprecationWarning):
+        beta = GlobalSplineFitBeta()
+    model = gsf.GSFEnergyPerNucleon(version="2017")
+    energy = np.logspace(1, 9, 25)
+    proton = sum(
+        model.p_and_n_flux(energy, g, time_interval=(199807, 199808))[0]
+        for g in model.active_groups
+    )
+    np.testing.assert_allclose(beta.p_and_n_flux(energy)[1], proton, rtol=5e-3)

@@ -35,6 +35,7 @@ Example::
     pfrac_cut, p_cut, n_cut = model_cut.p_and_n_flux(E)
 """
 
+import warnings
 from abc import ABCMeta, abstractmethod
 
 import numpy as np
@@ -955,9 +956,13 @@ class GlobalSplineFitBeta(PrimaryFlux):
     of subleading elements. Covers the whole rigidity range from
     10 GV to 10^11 GeV.
 
-    Tabulated ICRC 2017 version (nucleon flux only). The full model, including
-    GSF 2026, is the globalsplinefit package; see GlobalSplineFitReduced. The
-    class picks the most recent spline file in the package directory.
+    .. deprecated::
+        Tabulated nucleon flux of GSF 2017 at Earth, modulated with a fixed
+        force-field potential of 554 MV (Usoskin, July 1998). It equals
+        globalsplinefit ``GSFEnergyPerNucleon(version="2017")`` with
+        ``time_interval=(199807, 199808)`` to 0.2%. Use globalsplinefit for
+        GSF 2017, GSF 2019 or current versions. The class picks the most
+        recent spline file in the package directory.
 
     Use for reference: Dembinski et al., PoS ICRC2017 533
     https://inspirehep.net/literature/1639832
@@ -967,6 +972,13 @@ class GlobalSplineFitBeta(PrimaryFlux):
     sname = "GSF"
 
     def __init__(self, spl_fname=None, **kwargs):
+        warnings.warn(
+            "GlobalSplineFitBeta is deprecated: it tabulates the GSF 2017 "
+            "nucleon flux at phi = 554 MV. Use globalsplinefit "
+            '(version="2017" or "2019", or a current version) instead.',
+            DeprecationWarning,
+            stacklevel=2,
+        )
         super().__init__(**kwargs)
         import bz2
         import os

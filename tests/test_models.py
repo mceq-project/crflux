@@ -188,6 +188,10 @@ def test_regression(cls, args, cid, energy, expected):
 
 
 class TestGlobalSplineFitBeta:
+    def test_deprecated(self):
+        with pytest.warns(DeprecationWarning, match="GSF 2017"):
+            mods.GlobalSplineFitBeta()
+
     def test_instantiation(self):
         gsf = mods.GlobalSplineFitBeta()
         assert gsf.nucleus_ids == []
