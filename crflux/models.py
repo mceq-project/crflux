@@ -844,40 +844,105 @@ class SimplePowerlaw27(PrimaryFlux):
         return self.params[0] * E ** (self.params[1])
 
 
-# The original GlobalSplineFit class depended on the unpackaged `gsf` module
-# and has been removed. Use GlobalSplineFitReduced (GSF 2026, via
-# globalsplinefit) or GlobalSplineFitBeta (tabulated 2017 nucleon flux).
+class GlobalSplineFit(PrimaryFlux):
+    """Global Spline Fit (GSF) model through the globalsplinefit package.
 
+    Per-nucleus fluxes come from ``GSFEnergy`` (total energy per nucleus) and
+    nucleon fluxes from ``GSFEnergyPerNucleon.p_and_n_flux`` (total energy per
+    nucleon), both in (m² s sr GeV)^-1. Requires the optional ``gsf`` extra.
 
-class GlobalSplineFitReduced(PrimaryFlux):
-    """Energy-pivot GSF proton/neutron model for atmospheric cascades.
-
-    The optional globalsplinefit dependency supplies the central model and its
-    correlated reduced parameters. Energies are total GeV per nucleon and fluxes
-    are in (m² s sr GeV)^-1, as required by MCEq's primary-model interface.
-    ``theta`` is in relative-flux units, not standard deviations. To vary a
-    component by one sigma, set theta[i] = reduction.sigma[i].
+    Use for reference: Fedynitch et al., arXiv:2609.32649 (2026).
 
     Parameters
     ----------
     version : str
-        Explicit GSF model revision; default is 2026.1.
-    theta : array-like, optional
-        Reduced-model parameter vector; the default is the central flux.
-    reduction : globalsplinefit.ReducedGSF, optional
-        Reuse an existing p/n reduction across many parameter variations.
+        globalsplinefit model version, e.g. "2026.1", "2025", "2019", "2017".
     time_interval : tuple or str, optional
-        GSF solar-modulation interval, or "LIS". None uses Solar Cycle 24.
-    basis : str
-        Interpolation basis ("spline" or "hat") when building a reduction.
+        Solar-modulation interval (YYYYMM, YYYYMM), or "LIS". None uses the
+        Solar Cycle 24 average.
+    geomagnetic_cutoff : float, optional
+        Rigidity cutoff in GV, applied by globalsplinefit per species in
+        rigidity (not the base-class E >= Z R_cut step).
 
     Notes
     -----
+    ``nucleus_ids`` lists every species of the version as CORSIKA ids
+    (100 A + Z with A the rounded mass, 14 for protons, 201 for deuterium
+    where the version carries it). ``gsf`` is the underlying
+    ``GSFEnergy`` model for uncertainties, covariances and composition.
+    """
+
+    def __init__(self, version="2026.1", time_interval=None, geomagnetic_cutoff=None):
+        super().__init__(geomagnetic_cutoff=geomagnetic_cutoff)
+        from globalsplinefit import GSFEnergy, GSFEnergyPerNucleon
+
+        opts = {
+            "version": version,
+            "default_time_interval": time_interval,
+            "default_rigidity_cutoff": geomagnetic_cutoff,
+        }
+        self.gsf = GSFEnergy(**opts)
+        self._gsf_nucleon = GSFEnergyPerNucleon(**opts)
+        self._species = {self._corsika_id(*sid): sid for sid in self.gsf.species}
+        self.nucleus_ids = sorted(self._species)
+        self.name = f"Global Spline Fit {self.gsf.version}"
+        self.sname = f"GSF{self.gsf.version}"
+
+    @staticmethod
+    def _corsika_id(z, a):
+        a = int(round(a))
+        return 14 if (z, a) == (1, 1) else 100 * a + z
+
+    def nucleus_flux(self, corsika_id, E):
+        # the cutoff is already applied by globalsplinefit
+        return self._nucleus_flux(corsika_id, np.atleast_1d(np.asarray(E, dtype=float)))
+
+    def _nucleus_flux(self, corsika_id, E):
+        if corsika_id not in self._species:
+            return np.zeros_like(E)
+        return self.gsf.flux(E, self._species[corsika_id])
+
+    def p_and_n_flux(self, E):
+        energy = np.atleast_1d(np.asarray(E, dtype=float))
+        model = self._gsf_nucleon
+        proton, neutron = sum(
+            model.p_and_n_flux(energy, g) for g in model.active_groups
+        )
+        total = proton + neutron
+        fraction = np.divide(proton, total, out=np.zeros_like(total), where=total > 0)
+        return fraction, proton, neutron
+
+    def tot_nucleon_flux(self, E):
+        return np.sum(self.p_and_n_flux(E)[1:], axis=0)
+
+
+# PrimaryFlux is repeated as a direct base: MCEq accepts a primary-model object
+# only if a direct base is named PrimaryFlux (initial_state.set_primary_model).
+class GlobalSplineFitReduced(GlobalSplineFit, PrimaryFlux):
+    """Reduced GSF proton/neutron model (``globalsplinefit.ReducedGSF``).
+
+    The nucleon flux of :class:`GlobalSplineFit` with its uncertainty
+    represented by relative-flux deviations ``theta`` at pivot energies;
+    ``theta[i] = reduction.sigma[i]`` is a one-sigma variation. Nucleon fluxes
+    only: ``nucleus_ids`` is empty and ``nucleus_flux`` raises.
+
     Use for reference: Fedynitch et al., arXiv:2609.32649 (2026).
 
-    This reduction represents nucleon fluxes only. Individual nucleus spectra
-    and composition observables are unavailable. Geomagnetic cutoffs should be
-    set on the underlying GSF model before constructing the reduction.
+    Parameters
+    ----------
+    version : str
+        globalsplinefit model version; default "2026.1".
+    theta : array-like, optional
+        Reduced-model parameter vector; the default is the central flux.
+    reduction : globalsplinefit.ReducedGSF, optional
+        Reuse an existing total p/n reduction across many parameter variations
+        (time interval, cutoff and basis are then taken from it).
+    time_interval : tuple or str, optional
+        Solar-modulation interval, or "LIS". None uses Solar Cycle 24.
+    geomagnetic_cutoff : float, optional
+        Rigidity cutoff in GV, applied by globalsplinefit.
+    basis : str
+        Interpolation basis ("spline" or "hat") when building a reduction.
     """
 
     def __init__(
@@ -887,26 +952,33 @@ class GlobalSplineFitReduced(PrimaryFlux):
         *,
         reduction=None,
         time_interval=None,
+        geomagnetic_cutoff=None,
         basis="spline",
     ):
-        super().__init__()
-        if reduction is None:
-            from globalsplinefit import GSFEnergyPerNucleon, ReducedGSF
-
-            reduction = ReducedGSF(
-                GSFEnergyPerNucleon(
-                    version=version, default_time_interval=time_interval
-                ),
-                basis=basis,
-            )
-        elif time_interval is not None or basis != "spline":
-            raise ValueError("Configure time_interval/basis on the supplied reduction")
+        PrimaryFlux.__init__(self, geomagnetic_cutoff=geomagnetic_cutoff)
         from globalsplinefit import (
             GSFEnergyPerNucleon,
             GSFKineticEnergyPerNucleon,
             ReducedGSF,
         )
 
+        if reduction is None:
+            reduction = ReducedGSF(
+                GSFEnergyPerNucleon(
+                    version=version,
+                    default_time_interval=time_interval,
+                    default_rigidity_cutoff=geomagnetic_cutoff,
+                ),
+                basis=basis,
+            )
+        elif (
+            time_interval is not None
+            or geomagnetic_cutoff is not None
+            or basis != "spline"
+        ):
+            raise ValueError(
+                "Configure time_interval/geomagnetic_cutoff/basis on the supplied reduction"
+            )
         if not isinstance(reduction, ReducedGSF) or reduction.per_group:
             raise ValueError("A total proton/neutron ReducedGSF is required")
         if not isinstance(reduction.model, GSFEnergyPerNucleon) or isinstance(
@@ -916,6 +988,8 @@ class GlobalSplineFitReduced(PrimaryFlux):
                 "MCEq requires total energy per nucleon, not kinetic energy"
             )
         self.reduction = reduction
+        self.gsf = reduction.model
+        self.nucleus_ids = []
         self.theta = (
             np.zeros(reduction.n_params)
             if theta is None
@@ -944,9 +1018,6 @@ class GlobalSplineFitReduced(PrimaryFlux):
         fraction = np.divide(proton, total, out=np.zeros_like(total), where=total > 0)
         return fraction, proton, neutron
 
-    def tot_nucleon_flux(self, E):
-        return np.sum(self.p_and_n_flux(E)[1:], axis=0)
-
 
 class GlobalSplineFitBeta(PrimaryFlux):
     """Data-driven fit of direct and indirect measurements of the
@@ -960,9 +1031,11 @@ class GlobalSplineFitBeta(PrimaryFlux):
         Tabulated nucleon flux of GSF 2017 at Earth, modulated with a fixed
         force-field potential of 554 MV (Usoskin, July 1998). It equals
         globalsplinefit ``GSFEnergyPerNucleon(version="2017")`` with
-        ``time_interval=(199807, 199808)`` to 0.2%. Use globalsplinefit for
-        GSF 2017, GSF 2019 or current versions. The class picks the most
-        recent spline file in the package directory.
+        ``time_interval=(199807, 199808)`` (protons to 0.2%; neutrons differ by
+        a few percent from the nucleon-count convention). Use
+        ``GlobalSplineFit(version="2017")`` (or "2019", or a current version)
+        instead. The class picks the most recent spline file in the package
+        directory.
 
     Use for reference: Dembinski et al., PoS ICRC2017 533
     https://inspirehep.net/literature/1639832
@@ -975,7 +1048,8 @@ class GlobalSplineFitBeta(PrimaryFlux):
         warnings.warn(
             "GlobalSplineFitBeta is deprecated: it tabulates the GSF 2017 "
             "nucleon flux at phi = 554 MV. Use globalsplinefit "
-            '(version="2017" or "2019", or a current version) instead.',
+            "crflux.models.GlobalSplineFit(version='2017') instead (or '2019', "
+            "or a current version).",
             DeprecationWarning,
             stacklevel=2,
         )

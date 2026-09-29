@@ -50,3 +50,45 @@ def test_beta_is_gsf2017_at_july_1998():
         for g in model.active_groups
     )
     np.testing.assert_allclose(beta.p_and_n_flux(energy)[1], proton, rtol=5e-3)
+
+
+def test_full_model_matches_globalsplinefit():
+    from crflux.models import GlobalSplineFit
+
+    model = GlobalSplineFit(version="2026.1")
+    ref = gsf.GSFEnergy(version="2026.1")
+    energy = np.logspace(1, 10, 40)
+    assert {14, 201, 402, 1608, 5626}.issubset(model.nucleus_ids)
+    np.testing.assert_allclose(model.nucleus_flux(14, energy), ref.flux(energy, "p"))
+    np.testing.assert_allclose(model.nucleus_flux(5626, energy), ref.flux(energy, "Fe"))
+    np.testing.assert_allclose(
+        model.total_flux(energy), ref.total_flux(energy), rtol=1e-12
+    )
+    assert np.all(model.nucleus_flux(999, energy) == 0)
+    nucleon = gsf.GSFEnergyPerNucleon(version="2026.1")
+    p, n = sum(nucleon.p_and_n_flux(energy, g) for g in nucleon.active_groups)
+    frac, mp, mn = model.p_and_n_flux(energy)
+    np.testing.assert_allclose([mp, mn], [p, n])
+    np.testing.assert_allclose(model.tot_nucleon_flux(energy), p + n)
+    np.testing.assert_allclose(frac, p / (p + n))
+    # reduced model at theta = 0 is the full nucleon flux
+    reduced = GlobalSplineFitReduced(version="2026.1")
+    np.testing.assert_allclose(reduced.p_and_n_flux(energy)[1:], [p, n], rtol=1e-10)
+    assert reduced.nucleus_ids == []
+    # MCEq checks the direct bases by name
+    for obj in (model, reduced):
+        assert any(b.__name__ == "PrimaryFlux" for b in type(obj).__bases__)
+
+
+def test_full_model_versions_and_cutoff():
+    from crflux.models import GlobalSplineFit
+
+    old = GlobalSplineFit(version="2017")
+    assert 201 not in old.nucleus_ids and old.sname == "GSF2017"
+    cut = GlobalSplineFit(version="2026.1", geomagnetic_cutoff=10.0)
+    energy = np.array([2.0, 5.0, 1e3])
+    assert cut.geomagnetic_cutoff == 10.0
+    assert cut.nucleus_flux(14, energy)[0] < 1e-3 * old.nucleus_flux(14, energy)[0]
+    assert cut.nucleus_flux(14, energy)[2] > 0
+    with pytest.raises(ValueError, match="supplied reduction"):
+        GlobalSplineFitReduced(reduction=gsf.ReducedGSF(), geomagnetic_cutoff=5.0)
