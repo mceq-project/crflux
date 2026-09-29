@@ -2,9 +2,9 @@
 
 ## High Priority
 
-- [x] Replace `GlobalSplineFit` with new GSF implementation: `GlobalSplineFitReduced` (via globalsplinefit)
+- [x] Replace `GlobalSplineFit` with new GSF implementation: `GlobalSplineFit` + `GlobalSplineFitReduced` (via globalsplinefit)
 - [ ] Regenerate `GSF_spline_*.pkl.bz2` with modern scipy to fix `DeprecationWarning` on unpickling (scipy.interpolate.fitpack2 namespace removal in SciPy 2.0)
-- [ ] Publish to PyPI as 2.0.0
+- [x] Publish to PyPI (2.0.0, 2.1.0)
 
 ## Medium Priority
 
