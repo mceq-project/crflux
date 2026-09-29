@@ -843,9 +843,9 @@ class SimplePowerlaw27(PrimaryFlux):
         return self.params[0] * E ** (self.params[1])
 
 
-# TODO: Replace GlobalSplineFit with new GSF implementation.
 # The original GlobalSplineFit class depended on the unpackaged `gsf` module
-# and has been removed. Use GlobalSplineFitBeta (spline-based) instead.
+# and has been removed. Use GlobalSplineFitReduced (GSF 2026, via
+# globalsplinefit) or GlobalSplineFitBeta (tabulated 2017 nucleon flux).
 
 
 class GlobalSplineFitReduced(PrimaryFlux):
@@ -872,6 +872,8 @@ class GlobalSplineFitReduced(PrimaryFlux):
 
     Notes
     -----
+    Use for reference: Fedynitch et al., arXiv:2609.32649 (2026).
+
     This reduction represents nucleon fluxes only. Individual nucleus spectra
     and composition observables are unavailable. Geomagnetic cutoffs should be
     set on the underlying GSF model before constructing the reduction.
@@ -953,9 +955,9 @@ class GlobalSplineFitBeta(PrimaryFlux):
     of subleading elements. Covers the whole rigidity range from
     10 GV to 10^11 GeV.
 
-    Tabulated ICRC 2017 version. The full interface will become
-    available, when the model is published. The class picks the most recent
-    spline file in the current directory.
+    Tabulated ICRC 2017 version (nucleon flux only). The full model, including
+    GSF 2026, is the globalsplinefit package; see GlobalSplineFitReduced. The
+    class picks the most recent spline file in the package directory.
 
     Use for reference: Dembinski et al., PoS ICRC2017 533
     https://inspirehep.net/literature/1639832

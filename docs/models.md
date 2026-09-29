@@ -76,9 +76,11 @@ The plot below shows the effect of different cutoff values on the H3a nucleon fl
 
 ## GSF 2026 reduced nucleon model
 
-`GlobalSplineFitReduced` adapts the optional `globalsplinefit` package's
-energy-pivot proton/neutron model to the `PrimaryFlux` / MCEq interface.
-Install the `gsf` extra, or install the maintained globalsplinefit checkout.
+`GlobalSplineFitReduced` adapts the energy-pivot proton/neutron model of
+[globalsplinefit](https://github.com/gsf-project/globalsplinefit) to the
+`PrimaryFlux` / MCEq interface. Install with `pip install "crflux[gsf]"`
+(Python >= 3.10). Reference: A. Fedynitch, K. Fujisue, H. Dembinski,
+R. Engel, [arXiv:2609.32649](https://arxiv.org/abs/2609.32649) (2026).
 
 ```python
 from crflux.models import GlobalSplineFitReduced
@@ -99,8 +101,3 @@ rescale the package's flux units. For a different time interval or a rigidity
 cutoff, construct the GSF reduction with those settings first. A reduced model
 has no individual-nucleus or composition prediction. Kinetic-energy reductions
 are rejected to prevent a silent energy-convention mismatch.
-
-The development GSF 2026.1 dependency currently requires maintainer access to
-`gsf-project/globalsplinefit`. Run `pytest tests/test_gsf_reduced.py -q` in an
-environment with that dependency installed. Public CI skips these optional
-integration tests until the GSF package is publicly installable.
