@@ -158,6 +158,27 @@ class TestDelta0:
         assert np.all(result >= -1)
         assert np.all(result <= 1)
 
+    @pytest.mark.parametrize(
+        "cls,args",
+        [
+            (mods.HillasGaisser2012, ("H3a",)),
+            (mods.GaisserStanevTilav, ("4-gen",)),
+            (mods.GaisserHonda, ()),
+        ],
+    )
+    def test_matches_p_and_n(self, cls, args):
+        mod = cls(*args)
+        E = np.logspace(1, 9, 25)
+        _, p, n = mod.p_and_n_flux(E)
+        np.testing.assert_allclose(mod.delta_0(E), (p - n) / (p + n), rtol=1e-12)
+
+    def test_nucleon_only_model(self):
+        with pytest.warns(DeprecationWarning):
+            mod = mods.GlobalSplineFitBeta()
+        E = np.logspace(1, 6, 10)
+        _, p, n = mod.p_and_n_flux(E)
+        np.testing.assert_allclose(mod.delta_0(E), (p - n) / (p + n))
+
 
 # Numerical regression tests at E = 1e4 GeV for proton flux
 REGRESSION_DATA = [

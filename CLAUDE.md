@@ -27,7 +27,7 @@ The entire model library lives in `crflux/models.py`.
 - **Nucleus IDs**: Follow CORSIKA scheme. Protons = 14, composite nuclei = `100*A + Z`.
 - **All `_nucleus_flux` implementations must handle array inputs** (use `np.atleast_1d`). No `np.vectorize`.
 - **`GlobalSplineFitBeta`** (deprecated): bundled spline file (`crflux/GSF_spline_20171007.pkl.bz2`) = GSF 2017 nucleon flux at φ = 554 MV (Usoskin, July 1998). Nucleon fluxes only.
-- **Geomagnetic cutoff**: All models accept `geomagnetic_cutoff` (in GV) as a constructor kwarg. For a nucleus with charge Z, flux is zeroed below `E_cut = Z * R_cut` GeV.
+- **Geomagnetic cutoff**: All models accept `geomagnetic_cutoff` (in GV) as a constructor kwarg. It is a rigidity cut: a nucleus (Z, A) with total energy E is kept iff `sqrt(E**2 - M**2) >= Z * R_cut`, M = A * `NUCLEON_MASS_GEV` (`PrimaryFlux.cutoff_energy`). `None` or 0 = no cutoff. GSF models delegate the cutoff to globalsplinefit (`cutoff_width` sigmoid, default 1 GV).
 
 ## CI
 

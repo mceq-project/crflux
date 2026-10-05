@@ -40,6 +40,10 @@ from abc import ABCMeta, abstractmethod
 
 import numpy as np
 
+#: Mean nucleon mass in GeV, (m_p + m_n)/2, the value globalsplinefit uses.
+#: The rest mass of a nucleus with mass number A is taken as A times this value.
+NUCLEON_MASS_GEV = 0.93891872965
+
 
 def _get_closest(value, in_list):
     """Compares the parameters ``value`` with values of the
@@ -61,8 +65,12 @@ class PrimaryFlux(metaclass=ABCMeta):
 
     Args:
       geomagnetic_cutoff (float, optional): rigidity cutoff in GV. If set,
-        the flux is zeroed below the corresponding energy for each nucleus.
-        For a nucleus with charge Z, the energy cutoff is E_cut = Z * R_cut.
+        the flux of each nucleus is zeroed below rigidity R_cut, i.e. where
+        its momentum p = sqrt(E**2 - M**2) is below Z * R_cut. ``E`` is the
+        total energy of the nucleus and M = A * :data:`NUCLEON_MASS_GEV` its
+        rest mass, so the energy threshold is
+        E_cut = sqrt((Z * R_cut)**2 + M**2), which tends to Z * R_cut for
+        E >> M. ``None`` or 0 means no cutoff.
     """
 
     def __init__(self, geomagnetic_cutoff=None):
@@ -98,11 +106,26 @@ class PrimaryFlux(metaclass=ABCMeta):
         """
         E = np.atleast_1d(np.asarray(E, dtype=float))
         flux = self._nucleus_flux(corsika_id, E)
-        if self.geomagnetic_cutoff is not None:
+        if self.geomagnetic_cutoff:
             Z, A = self.Z_A(corsika_id)
-            E_cut = Z * self.geomagnetic_cutoff
-            flux = np.where(E >= E_cut, flux, 0.0)
+            flux = np.where(
+                E >= self.cutoff_energy(Z, A, self.geomagnetic_cutoff), flux, 0.0
+            )
         return flux
+
+    @staticmethod
+    def cutoff_energy(Z, A, rigidity):
+        """Total energy of a nucleus (Z, A) with rigidity ``rigidity``.
+
+        Args:
+          Z (int): charge
+          A (int): mass number
+          rigidity (float or numpy.ndarray): rigidity in GV
+        Returns:
+          (float or numpy.ndarray): total energy sqrt((Z R)^2 + M^2) in GeV,
+          with M = A * :data:`NUCLEON_MASS_GEV`
+        """
+        return np.sqrt((Z * rigidity) ** 2 + (A * NUCLEON_MASS_GEV) ** 2)
 
     def total_flux(self, E):
         """Returns total flux of nuclei, the "all-particle-flux".
@@ -167,32 +190,19 @@ class PrimaryFlux(metaclass=ABCMeta):
         """Returns proton excess.
 
         The proton excess is defined as
-        :math:`\\delta_0 = \\frac{\\Phi_p - \\Phi_n}{\\Phi_p + \\Phi_n}`.
+        :math:`\\delta_0 = \\frac{\\Phi_p - \\Phi_n}{\\Phi_p + \\Phi_n}`,
+        with the nucleon fluxes from :meth:`p_and_n_flux`.
 
         Args:
           E (float or numpy.ndarray): laboratory energy of nucleons in GeV
         Returns:
           (numpy.ndarray): proton excess :math:`\\delta_0`
         """
-        p_0 = 0.0
-        n_0 = 0.0
-
-        p_0 += self.nucleus_flux(14, E)
-
-        p_0 += 2.0**2 * self.nucleus_flux(402, E * 4.0)
-        n_0 += 2.0**2 * self.nucleus_flux(402, E * 4.0)
-
-        p_0 += 6.0**2 * self.nucleus_flux(1206, E * 12.0)
-        n_0 += 6.0**2 * self.nucleus_flux(1206, E * 12.0)
-
-        p_0 += 14.0**2 * self.nucleus_flux(2814, E * 28.0)
-        n_0 += 14.0**2 * self.nucleus_flux(2814, E * 28.0)
-
-        a_fe = self.Z_A(5426)[1]
-        p_0 += 26.0**2 * self.nucleus_flux(5426, E * a_fe)
-        n_0 += 26.0**2 * self.nucleus_flux(5426, E * a_fe)
-
-        return (p_0 - n_0) / (p_0 + n_0)
+        _, p_0, n_0 = self.p_and_n_flux(E)
+        total = p_0 + n_0
+        return np.divide(
+            p_0 - n_0, total, out=np.zeros_like(total, dtype=float), where=total > 0
+        )
 
     def p_and_n_flux(self, E):
         """Returns tuple with proton fraction, proton flux and neutron flux.
@@ -844,6 +854,22 @@ class SimplePowerlaw27(PrimaryFlux):
         return self.params[0] * E ** (self.params[1])
 
 
+def _gsf_options(version, time_interval, geomagnetic_cutoff, cutoff_width):
+    """Keyword arguments for the globalsplinefit model constructors.
+
+    A cutoff of 0 GV is passed as no cutoff: with a smooth transition
+    globalsplinefit would otherwise suppress the flux below ~2 GV.
+    """
+    opts = {
+        "version": version,
+        "default_time_interval": time_interval,
+        "default_rigidity_cutoff": geomagnetic_cutoff or None,
+    }
+    if cutoff_width is not None:
+        opts["cutoff_width"] = cutoff_width
+    return opts
+
+
 class GlobalSplineFit(PrimaryFlux):
     """Global Spline Fit (GSF) model through the globalsplinefit package.
 
@@ -862,7 +888,11 @@ class GlobalSplineFit(PrimaryFlux):
         Solar Cycle 24 average.
     geomagnetic_cutoff : float, optional
         Rigidity cutoff in GV, applied by globalsplinefit per species in
-        rigidity (not the base-class E >= Z R_cut step).
+        true rigidity. ``None`` or 0 means no cutoff.
+    cutoff_width : float, optional
+        Width in GV of globalsplinefit's sigmoid cutoff transition; 0 gives a
+        sharp step at ``geomagnetic_cutoff``. ``None`` keeps the
+        globalsplinefit default (1 GV).
 
     Notes
     -----
@@ -872,15 +902,17 @@ class GlobalSplineFit(PrimaryFlux):
     ``GSFEnergy`` model for uncertainties, covariances and composition.
     """
 
-    def __init__(self, version="2026.1", time_interval=None, geomagnetic_cutoff=None):
+    def __init__(
+        self,
+        version="2026.1",
+        time_interval=None,
+        geomagnetic_cutoff=None,
+        cutoff_width=None,
+    ):
         super().__init__(geomagnetic_cutoff=geomagnetic_cutoff)
         from globalsplinefit import GSFEnergy, GSFEnergyPerNucleon
 
-        opts = {
-            "version": version,
-            "default_time_interval": time_interval,
-            "default_rigidity_cutoff": geomagnetic_cutoff,
-        }
+        opts = _gsf_options(version, time_interval, geomagnetic_cutoff, cutoff_width)
         self.gsf = GSFEnergy(**opts)
         self._gsf_nucleon = GSFEnergyPerNucleon(**opts)
         self._species = {self._corsika_id(*sid): sid for sid in self.gsf.species}
@@ -940,7 +972,11 @@ class GlobalSplineFitReduced(GlobalSplineFit, PrimaryFlux):
     time_interval : tuple or str, optional
         Solar-modulation interval, or "LIS". None uses Solar Cycle 24.
     geomagnetic_cutoff : float, optional
-        Rigidity cutoff in GV, applied by globalsplinefit.
+        Rigidity cutoff in GV, applied by globalsplinefit. ``None`` or 0 means
+        no cutoff.
+    cutoff_width : float, optional
+        Width in GV of the sigmoid cutoff transition (0 = sharp); ``None``
+        keeps the globalsplinefit default (1 GV).
     basis : str
         Interpolation basis ("spline" or "hat") when building a reduction.
     """
@@ -953,6 +989,7 @@ class GlobalSplineFitReduced(GlobalSplineFit, PrimaryFlux):
         reduction=None,
         time_interval=None,
         geomagnetic_cutoff=None,
+        cutoff_width=None,
         basis="spline",
     ):
         PrimaryFlux.__init__(self, geomagnetic_cutoff=geomagnetic_cutoff)
@@ -965,19 +1002,21 @@ class GlobalSplineFitReduced(GlobalSplineFit, PrimaryFlux):
         if reduction is None:
             reduction = ReducedGSF(
                 GSFEnergyPerNucleon(
-                    version=version,
-                    default_time_interval=time_interval,
-                    default_rigidity_cutoff=geomagnetic_cutoff,
+                    **_gsf_options(
+                        version, time_interval, geomagnetic_cutoff, cutoff_width
+                    )
                 ),
                 basis=basis,
             )
         elif (
             time_interval is not None
             or geomagnetic_cutoff is not None
+            or cutoff_width is not None
             or basis != "spline"
         ):
             raise ValueError(
-                "Configure time_interval/geomagnetic_cutoff/basis on the supplied reduction"
+                "Configure time_interval/geomagnetic_cutoff/cutoff_width/basis "
+                "on the supplied reduction"
             )
         if not isinstance(reduction, ReducedGSF) or reduction.per_group:
             raise ValueError("A total proton/neutron ReducedGSF is required")
@@ -1037,6 +1076,13 @@ class GlobalSplineFitBeta(PrimaryFlux):
         instead. The class picks the most recent spline file in the package
         directory.
 
+    .. note::
+        The table has no composition, so ``geomagnetic_cutoff`` is applied to
+        the nucleon fluxes as if every nucleon were a free proton
+        (rigidity cutoff with Z = A = 1). Nuclei with A/Z ~ 2 are thereby kept
+        down to about half their true cutoff energy per nucleon.
+        ``GlobalSplineFit`` applies the cutoff per species in rigidity.
+
     Use for reference: Dembinski et al., PoS ICRC2017 533
     https://inspirehep.net/literature/1639832
     """
@@ -1049,7 +1095,8 @@ class GlobalSplineFitBeta(PrimaryFlux):
             "GlobalSplineFitBeta is deprecated: it tabulates the GSF 2017 "
             "nucleon flux at phi = 554 MV. Use globalsplinefit "
             "crflux.models.GlobalSplineFit(version='2017') instead (or '2019', "
-            "or a current version).",
+            "or a current version). Its geomagnetic_cutoff treats all "
+            "nucleons as free protons (A/Z = 1).",
             DeprecationWarning,
             stacklevel=2,
         )
@@ -1108,10 +1155,10 @@ class GlobalSplineFitBeta(PrimaryFlux):
         p_flux = np.exp(self.p_flux_spl(np.log(E)))
         n_flux = np.exp(self.n_flux_spl(np.log(E)))
 
-        if self.geomagnetic_cutoff is not None:
-            # For nucleon fluxes, apply proton cutoff (Z=1, A=1)
-            E_cut = self.geomagnetic_cutoff
-            mask = E >= E_cut
+        if self.geomagnetic_cutoff:
+            # No composition in the table: cut all nucleons as free protons
+            # in rigidity (A/Z = 1; see the class note)
+            mask = E >= self.cutoff_energy(1, 1, self.geomagnetic_cutoff)
             p_flux = np.where(mask, p_flux, 0.0)
             n_flux = np.where(mask, n_flux, 0.0)
 

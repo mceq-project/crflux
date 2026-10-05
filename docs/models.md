@@ -62,8 +62,12 @@ Protons have ID 14. Composite nuclei: `ID = 100 * A + Z`
 ## Geomagnetic Cutoff
 
 All models accept `geomagnetic_cutoff` (in GV) as a constructor parameter.
-For a nucleus with charge $Z$, the energy cutoff is $E_\text{cut} = Z \times R_\text{cut}$ (GeV).
-Flux is zeroed below this energy.
+It is a cut in rigidity: the flux of a nucleus with charge $Z$ and mass number
+$A$ is zeroed where its momentum $p = \sqrt{E^2 - M^2}$ is below $Z R_\text{cut}$,
+with $E$ the total energy of the nucleus and $M = A \times 0.93892$ GeV (mean
+nucleon mass, as in globalsplinefit). The energy threshold is
+$E_\text{cut} = \sqrt{(Z R_\text{cut})^2 + M^2}$, which tends to $Z R_\text{cut}$
+for $E \gg M$. `None` or 0 means no cutoff.
 
 ```python
 import crflux.models as mods
@@ -106,6 +110,10 @@ fraction, proton, neutron = varied.p_and_n_flux(np.logspace(0, 8, 50))
 Energies are total GeV (per nucleus for `nucleus_flux`, per nucleon for
 `p_and_n_flux`). `time_interval` selects the solar-modulation period (default
 Solar Cycle 24, `"LIS"` for none). `geomagnetic_cutoff` is applied by
-globalsplinefit per species in rigidity. Kinetic-energy reductions are rejected.
+globalsplinefit per species in rigidity, with a sigmoid transition of width
+`cutoff_width` (default 1 GV; 0 = sharp step); a cutoff of 0 is no cutoff.
+Kinetic-energy reductions are rejected.
 `GlobalSplineFitBeta` is deprecated: its table is GSF 2017 at a fixed
 φ = 554 MV, i.e. `GlobalSplineFit(version="2017", time_interval=(199807, 199808))`.
+Having no composition, it applies `geomagnetic_cutoff` to all nucleons as if
+they were free protons (A/Z = 1).

@@ -9,42 +9,57 @@ class TestGeomagneticCutoff:
         mod = mods.HillasGaisser2012("H3a")
         assert mod.geomagnetic_cutoff is None
 
-    def test_proton_cutoff(self):
-        """Proton (Z=1): E_cut = 1 * 7 = 7 GeV."""
-        mod = mods.HillasGaisser2012("H3a", geomagnetic_cutoff=7.0)
-        below = mod.nucleus_flux(14, 5.0)
-        above = mod.nucleus_flux(14, 10.0)
-        assert float(below[0]) == 0.0
-        assert float(above[0]) > 0.0
+    @staticmethod
+    def e_cut(Z, A, R):
+        """Total energy of a nucleus (Z, A) at rigidity R."""
+        return np.sqrt((Z * R) ** 2 + (A * mods.NUCLEON_MASS_GEV) ** 2)
 
-    def test_iron_cutoff(self):
-        """Iron (Z=26, A=54): E_cut = 26 * 7 = 182 GeV."""
-        mod = mods.HillasGaisser2012("H3a", geomagnetic_cutoff=7.0)
-        below = mod.nucleus_flux(5426, 100.0)
-        above = mod.nucleus_flux(5426, 200.0)
-        assert float(below[0]) == 0.0
-        assert float(above[0]) > 0.0
+    @pytest.mark.parametrize("cid", [14, 402, 1206, 2814, 5426])
+    @pytest.mark.parametrize("R", [0.5, 3.0, 7.0, 12.0])
+    def test_rigidity_threshold(self, cid, R):
+        """Flux is zero exactly below p = Z R, i.e. E = sqrt((Z R)^2 + M^2)."""
+        mod = mods.HillasGaisser2012("H3a", geomagnetic_cutoff=R)
+        Z, A = mod.Z_A(cid)
+        e_cut = self.e_cut(Z, A, R)
+        assert mod.cutoff_energy(Z, A, R) == pytest.approx(e_cut, rel=1e-15)
+        E = e_cut * np.array([1 - 1e-9, 1 + 1e-9])
+        below, above = mod.nucleus_flux(cid, E)
+        assert below == 0.0
+        assert above > 0.0
+        p = np.sqrt(E**2 - (A * mods.NUCLEON_MASS_GEV) ** 2)
+        assert p[0] / Z < R < p[1] / Z
 
-    def test_helium_cutoff(self):
-        """Helium (Z=2): E_cut = 2 * 7 = 14 GeV."""
-        mod = mods.HillasGaisser2012("H3a", geomagnetic_cutoff=7.0)
-        below = mod.nucleus_flux(402, 10.0)
-        above = mod.nucleus_flux(402, 20.0)
-        assert float(below[0]) == 0.0
-        assert float(above[0]) > 0.0
+    def test_ultrarelativistic_limit(self):
+        """For E >> M the threshold reduces to E_cut = Z R."""
+        for Z, A in [(1, 1), (2, 4), (26, 54)]:
+            R = 1e4
+            assert mods.PrimaryFlux.cutoff_energy(Z, A, R) == pytest.approx(
+                Z * R, rel=1e-6
+            )
+
+    def test_threshold_above_old_step(self):
+        """The rigidity threshold lies above the old E = Z R step."""
+        mod = mods.HillasGaisser2012("H3a", geomagnetic_cutoff=3.0)
+        assert mod.nucleus_flux(14, 3.1)[0] == 0.0  # p = 2.95 GeV/c < 3 GV
+        assert mod.nucleus_flux(402, 6.5)[0] == 0.0  # p = 5.0 GeV/c < 6 GV
+
+    def test_zero_cutoff_is_no_cutoff(self):
+        mod = mods.HillasGaisser2012("H3a")
+        mod0 = mods.HillasGaisser2012("H3a", geomagnetic_cutoff=0.0)
+        E = np.logspace(-0.5, 3, 20)
+        for cid in mod.nucleus_ids:
+            np.testing.assert_array_equal(
+                mod.nucleus_flux(cid, E), mod0.nucleus_flux(cid, E)
+            )
 
     def test_array_cutoff(self):
         """Cutoff should apply correctly to arrays."""
         mod = mods.HillasGaisser2012("H3a", geomagnetic_cutoff=7.0)
-        E = np.array([1.0, 5.0, 7.0, 10.0, 100.0])
+        e_cut = self.e_cut(1, 1, 7.0)
+        E = np.array([1.0, 5.0, 7.0, e_cut, 10.0, 100.0])
         result = mod.nucleus_flux(14, E)
-        # Below 7 GeV should be zero
-        assert result[0] == 0.0
-        assert result[1] == 0.0
-        # At and above 7 GeV should be nonzero
-        assert result[2] > 0.0
-        assert result[3] > 0.0
-        assert result[4] > 0.0
+        np.testing.assert_array_equal(result[:3], 0.0)
+        assert np.all(result[3:] > 0.0)
 
     def test_cutoff_does_not_alter_above(self):
         """Flux above cutoff should be identical to model without cutoff."""
@@ -69,14 +84,15 @@ class TestGeomagneticCutoff:
         assert np.all(n >= 0)
 
     def test_gsf_beta_cutoff(self):
-        """GlobalSplineFitBeta applies cutoff to nucleon fluxes."""
-        gsf = mods.GlobalSplineFitBeta(geomagnetic_cutoff=100.0)
-        E = np.array([10.0, 50.0, 100.0, 200.0, 1000.0])
+        """GlobalSplineFitBeta cuts nucleons as free protons in rigidity."""
+        with pytest.warns(DeprecationWarning, match="A/Z = 1"):
+            gsf = mods.GlobalSplineFitBeta(geomagnetic_cutoff=100.0)
+        e_cut = self.e_cut(1, 1, 100.0)
+        E = np.array([10.0, 50.0, 100.0, e_cut, 200.0, 1000.0])
         _, p, n = gsf.p_and_n_flux(E)
-        assert p[0] == 0.0
-        assert p[1] == 0.0
-        assert p[2] > 0.0  # at cutoff
-        assert p[3] > 0.0
+        np.testing.assert_array_equal(p[:3], 0.0)
+        np.testing.assert_array_equal(n[:3], 0.0)
+        assert np.all(p[3:] > 0.0)
 
 
 class TestCutoffAllModels:

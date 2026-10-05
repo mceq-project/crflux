@@ -92,3 +92,56 @@ def test_full_model_versions_and_cutoff():
     assert cut.nucleus_flux(14, energy)[2] > 0
     with pytest.raises(ValueError, match="supplied reduction"):
         GlobalSplineFitReduced(reduction=gsf.ReducedGSF(), geomagnetic_cutoff=5.0)
+
+
+def test_zero_cutoff_is_no_cutoff():
+    """0 GV must not trigger globalsplinefit's sigmoid (it cuts ~2 % of p)."""
+    from crflux.models import GlobalSplineFit
+
+    energy = np.logspace(0, 3, 30)
+    ref = GlobalSplineFit(version="2026.1")
+    zero = GlobalSplineFit(version="2026.1", geomagnetic_cutoff=0.0)
+    for cid in (14, 402, 5626):
+        np.testing.assert_array_equal(
+            zero.nucleus_flux(cid, energy), ref.nucleus_flux(cid, energy)
+        )
+    np.testing.assert_array_equal(zero.p_and_n_flux(energy), ref.p_and_n_flux(energy))
+    red0 = GlobalSplineFitReduced(version="2026.1", geomagnetic_cutoff=0.0)
+    red = GlobalSplineFitReduced(version="2026.1")
+    np.testing.assert_allclose(red0.p_and_n_flux(energy), red.p_and_n_flux(energy))
+
+
+def test_cutoff_width():
+    from crflux.models import NUCLEON_MASS_GEV, GlobalSplineFit
+
+    rc = 8.0
+    sharp = GlobalSplineFit(version="2026.1", geomagnetic_cutoff=rc, cutoff_width=0)
+    smooth = GlobalSplineFit(version="2026.1", geomagnetic_cutoff=rc)
+    ref = GlobalSplineFit(version="2026.1")
+    for z, a, cid in [(1, 1, 14), (2, 4, 402), (26, 56, 5626)]:
+        e_cut = np.sqrt((z * rc) ** 2 + (a * NUCLEON_MASS_GEV) ** 2)
+        energy = e_cut * np.array([0.999, 1.001])
+        below, above = sharp.nucleus_flux(cid, energy)
+        assert below == 0.0
+        np.testing.assert_allclose(above, ref.nucleus_flux(cid, energy)[1])
+        # default 1 GV sigmoid: half of the flux at the cutoff rigidity
+        np.testing.assert_allclose(
+            smooth.nucleus_flux(cid, e_cut),
+            0.5 * ref.nucleus_flux(cid, e_cut),
+            rtol=2e-3,
+        )
+    red = GlobalSplineFitReduced(
+        version="2026.1", geomagnetic_cutoff=rc, cutoff_width=0.5
+    )
+    assert red.gsf.cutoff_width == 0.5
+    with pytest.raises(ValueError, match="supplied reduction"):
+        GlobalSplineFitReduced(reduction=gsf.ReducedGSF(), cutoff_width=0.0)
+
+
+def test_delta_0_from_nucleon_fluxes():
+    from crflux.models import GlobalSplineFit
+
+    energy = np.logspace(1, 9, 25)
+    for model in (GlobalSplineFit(version="2026.1"), GlobalSplineFitReduced()):
+        _, p, n = model.p_and_n_flux(energy)
+        np.testing.assert_allclose(model.delta_0(energy), (p - n) / (p + n))
