@@ -14,7 +14,7 @@ class TestGeomagneticCutoff:
         """Total energy of a nucleus (Z, A) at rigidity R."""
         return np.sqrt((Z * R) ** 2 + (A * mods.NUCLEON_MASS_GEV) ** 2)
 
-    @pytest.mark.parametrize("cid", [14, 402, 1206, 2814, 5426])
+    @pytest.mark.parametrize("cid", [14, 402, 1206, 2814, 5626])
     @pytest.mark.parametrize("R", [0.5, 3.0, 7.0, 12.0])
     def test_rigidity_threshold(self, cid, R):
         """Flux is zero exactly below p = Z R, i.e. E = sqrt((Z R)^2 + M^2)."""
@@ -31,7 +31,7 @@ class TestGeomagneticCutoff:
 
     def test_ultrarelativistic_limit(self):
         """For E >> M the threshold reduces to E_cut = Z R."""
-        for Z, A in [(1, 1), (2, 4), (26, 54)]:
+        for Z, A in [(1, 1), (2, 4), (26, 56)]:
             R = 1e4
             assert mods.PrimaryFlux.cutoff_energy(Z, A, R) == pytest.approx(
                 Z * R, rel=1e-6

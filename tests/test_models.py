@@ -25,14 +25,14 @@ class TestZA:
 
     def test_iron(self):
         pf = mods.HillasGaisser2012("H3a")
-        Z, A = pf.Z_A(5426)
+        Z, A = pf.Z_A(5626)
         assert Z == 26
-        assert A == 54
+        assert A == 56
 
     def test_integer_A(self):
         """Z_A should return integer A, not float."""
         pf = mods.HillasGaisser2012("H3a")
-        _, A = pf.Z_A(5426)
+        _, A = pf.Z_A(5626)
         assert isinstance(A, int)
 
 
@@ -40,7 +40,10 @@ class TestFindNearbyId:
     def test_exact_match(self):
         mod = mods.HillasGaisser2012("H3a")
         assert mod._find_nearby_id(14) == 14
-        assert mod._find_nearby_id(5426) == 5426
+        assert mod._find_nearby_id(5626) == 5626
+        assert 5626 in mod.nucleus_ids and 5426 not in mod.nucleus_ids
+        # the former Fe-54 id still resolves to Fe-56
+        assert mod._find_nearby_id(5426) == 5626
 
     def test_nearby_match(self):
         mod = mods.HillasGaisser2012("H3a")
