@@ -870,15 +870,11 @@ class SimplePowerlaw27(PrimaryFlux):
 
 
 def _gsf_options(version, time_interval, geomagnetic_cutoff, cutoff_width):
-    """Keyword arguments for the globalsplinefit model constructors.
-
-    A cutoff of 0 GV is passed as no cutoff: with a smooth transition
-    globalsplinefit would otherwise suppress the flux below ~2 GV.
-    """
+    """Keyword arguments for the globalsplinefit model constructors."""
     opts = {
         "version": version,
         "default_time_interval": time_interval,
-        "default_rigidity_cutoff": geomagnetic_cutoff or None,
+        "default_rigidity_cutoff": geomagnetic_cutoff,
     }
     if cutoff_width is not None:
         opts["cutoff_width"] = cutoff_width
