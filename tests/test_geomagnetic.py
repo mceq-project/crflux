@@ -83,16 +83,14 @@ class TestGeomagneticCutoff:
         assert np.all(p > 0)
         assert np.all(n >= 0)
 
-    def test_gsf_beta_cutoff(self):
-        """GlobalSplineFitBeta cuts nucleons as free protons in rigidity."""
-        with pytest.warns(DeprecationWarning, match="A/Z = 1"):
-            gsf = mods.GlobalSplineFitBeta(geomagnetic_cutoff=100.0)
-        e_cut = self.e_cut(1, 1, 100.0)
-        E = np.array([10.0, 50.0, 100.0, e_cut, 200.0, 1000.0])
-        _, p, n = gsf.p_and_n_flux(E)
-        np.testing.assert_array_equal(p[:3], 0.0)
-        np.testing.assert_array_equal(n[:3], 0.0)
-        assert np.all(p[3:] > 0.0)
+    def test_gsf_beta_cutoff_raises(self):
+        """GlobalSplineFitBeta has no composition: a cutoff is refused."""
+        with pytest.raises(ValueError, match="GlobalSplineFit"):
+            mods.GlobalSplineFitBeta(geomagnetic_cutoff=10.0)
+        for no_cut in (None, 0.0):
+            with pytest.warns(DeprecationWarning):
+                gsf = mods.GlobalSplineFitBeta(geomagnetic_cutoff=no_cut)
+            assert np.all(gsf.p_and_n_flux(np.array([10.0, 100.0]))[1] > 0)
 
 
 class TestCutoffAllModels:
@@ -108,7 +106,6 @@ class TestCutoffAllModels:
         (mods.GaisserHonda, ()),
         (mods.Thunman, ()),
         (mods.SimplePowerlaw27, ()),
-        (mods.GlobalSplineFitBeta, ()),
     ]
 
     @pytest.mark.parametrize(

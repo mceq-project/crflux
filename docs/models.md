@@ -115,5 +115,7 @@ globalsplinefit per species in rigidity, with a sigmoid transition of width
 Kinetic-energy reductions are rejected.
 `GlobalSplineFitBeta` is deprecated: its table is GSF 2017 at a fixed
 φ = 554 MV, i.e. `GlobalSplineFit(version="2017", time_interval=(199807, 199808))`.
-Having no composition, it applies `geomagnetic_cutoff` to all nucleons as if
-they were free protons (A/Z = 1).
+Having no composition, it refuses a `geomagnetic_cutoff` (`ValueError`), and
+its `nucleus_flux`, `total_flux` and `lnA` raise `NotImplementedError`, as do
+those of `GlobalSplineFitReduced`. The reduced model does take a cutoff: it is
+applied per species by globalsplinefit before the reduction.

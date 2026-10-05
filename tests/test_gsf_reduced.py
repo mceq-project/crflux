@@ -21,8 +21,9 @@ def test_reduced_nucleon_flux_and_sigma_variation():
     theta[3] = 0  # constructor owns its vector
     assert varied.theta[3] != 0
     assert model.p_and_n_flux(10.0)[0].shape == (1,)
-    with pytest.raises(NotImplementedError):
-        model.nucleus_flux(14, energy)
+    for call in (model.nucleus_flux, model.total_flux, model.lnA):
+        with pytest.raises(NotImplementedError, match="GlobalSplineFit"):
+            call(*((14, energy) if call == model.nucleus_flux else (energy,)))
 
 
 def test_reject_kinetic_energy_and_bad_theta():

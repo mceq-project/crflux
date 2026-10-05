@@ -45,6 +45,14 @@ import numpy as np
 NUCLEON_MASS_GEV = 0.93891872965
 
 
+def _nucleon_only_message(model, what):
+    return (
+        f"{model.__class__.__name__} provides proton and neutron fluxes only, "
+        f"no per-nucleus fluxes ({what}). Use crflux.models.GlobalSplineFit, "
+        "the full per-species GSF model."
+    )
+
+
 def _get_closest(value, in_list):
     """Compares the parameters ``value`` with values of the
     iterable ``in_list`` and returns the index and value of closest
@@ -136,6 +144,7 @@ class PrimaryFlux(metaclass=ABCMeta):
           (numpy.ndarray): particle flux in :math:`\\Phi_{particles}` in
           :math:`(\\text{m}^2 \\text{s sr GeV})^{-1}`
         """
+        self._require_nuclei("total_flux")
         return sum(self.nucleus_flux(corsika_id, E) for corsika_id in self.nucleus_ids)
 
     def tot_nucleon_flux(self, E):
@@ -242,6 +251,7 @@ class PrimaryFlux(metaclass=ABCMeta):
         Returns:
           (numpy.ndarray): mean (natural) logarithmic mass
         """
+        self._require_nuclei("lnA")
         sum_weight = 0.0
 
         for cid in self.nucleus_ids:
@@ -250,6 +260,11 @@ class PrimaryFlux(metaclass=ABCMeta):
             sum_weight += np.log(self.Z_A(cid)[1]) * self.nucleus_flux(cid, E)
 
         return sum_weight / self.total_flux(E)
+
+    def _require_nuclei(self, method):
+        """Raise for nucleon-only models, which have no per-nucleus fluxes."""
+        if not self.nucleus_ids:
+            raise NotImplementedError(_nucleon_only_message(self, method))
 
     def _find_nearby_id(self, corsika_id, delta_A=3):
         """Looks in :attr:`self.params` for a nucleus with same ``corsika_id``
@@ -956,7 +971,16 @@ class GlobalSplineFitReduced(GlobalSplineFit, PrimaryFlux):
     The nucleon flux of :class:`GlobalSplineFit` with its uncertainty
     represented by relative-flux deviations ``theta`` at pivot energies;
     ``theta[i] = reduction.sigma[i]`` is a one-sigma variation. Nucleon fluxes
-    only: ``nucleus_ids`` is empty and ``nucleus_flux`` raises.
+    only: ``nucleus_ids`` is empty and ``nucleus_flux``, ``total_flux`` and
+    ``lnA`` raise ``NotImplementedError``.
+
+    A ``geomagnetic_cutoff`` is applied by globalsplinefit to every species
+    with its own (Z, A) before the reduction, so the central flux and the
+    pivot covariance are those of the cut flux (the mask does not depend on
+    the fit parameters). It is one global value per reduction: a cutoff that
+    varies with direction needs one reduction per value, or
+    :class:`GlobalSplineFit`. With a sharp step (``cutoff_width=0``) pivots
+    below the cutoff have zero flux and globalsplinefit rejects the reduction.
 
     Use for reference: Fedynitch et al., arXiv:2609.32649 (2026).
 
@@ -1046,9 +1070,7 @@ class GlobalSplineFitReduced(GlobalSplineFit, PrimaryFlux):
         self.sname = f"GSF{reduction.model.version}"
 
     def _nucleus_flux(self, corsika_id, E):
-        raise NotImplementedError(
-            "ReducedGSF provides only proton/neutron nucleon fluxes"
-        )
+        raise NotImplementedError(_nucleon_only_message(self, "nucleus_flux"))
 
     def p_and_n_flux(self, E):
         energy = np.atleast_1d(np.asarray(E, dtype=float))
@@ -1077,11 +1099,11 @@ class GlobalSplineFitBeta(PrimaryFlux):
         directory.
 
     .. note::
-        The table has no composition, so ``geomagnetic_cutoff`` is applied to
-        the nucleon fluxes as if every nucleon were a free proton
-        (rigidity cutoff with Z = A = 1). Nuclei with A/Z ~ 2 are thereby kept
-        down to about half their true cutoff energy per nucleon.
-        ``GlobalSplineFit`` applies the cutoff per species in rigidity.
+        The table holds nucleon fluxes without composition, so a rigidity
+        cutoff cannot be applied (it needs each nucleus' Z and A):
+        ``geomagnetic_cutoff`` other than ``None``/0 raises ``ValueError``,
+        and ``nucleus_flux``, ``total_flux`` and ``lnA`` raise
+        ``NotImplementedError``. ``GlobalSplineFit`` provides both.
 
     Use for reference: Dembinski et al., PoS ICRC2017 533
     https://inspirehep.net/literature/1639832
@@ -1095,11 +1117,16 @@ class GlobalSplineFitBeta(PrimaryFlux):
             "GlobalSplineFitBeta is deprecated: it tabulates the GSF 2017 "
             "nucleon flux at phi = 554 MV. Use globalsplinefit "
             "crflux.models.GlobalSplineFit(version='2017') instead (or '2019', "
-            "or a current version). Its geomagnetic_cutoff treats all "
-            "nucleons as free protons (A/Z = 1).",
+            "or a current version).",
             DeprecationWarning,
             stacklevel=2,
         )
+        if kwargs.get("geomagnetic_cutoff"):
+            raise ValueError(
+                "GlobalSplineFitBeta has no composition, so a rigidity cutoff "
+                "cannot be applied. Use crflux.models.GlobalSplineFit, the full "
+                "per-species GSF model, with geomagnetic_cutoff."
+            )
         super().__init__(**kwargs)
         import bz2
         import os
@@ -1155,13 +1182,6 @@ class GlobalSplineFitBeta(PrimaryFlux):
         p_flux = np.exp(self.p_flux_spl(np.log(E)))
         n_flux = np.exp(self.n_flux_spl(np.log(E)))
 
-        if self.geomagnetic_cutoff:
-            # No composition in the table: cut all nucleons as free protons
-            # in rigidity (A/Z = 1; see the class note)
-            mask = E >= self.cutoff_energy(1, 1, self.geomagnetic_cutoff)
-            p_flux = np.where(mask, p_flux, 0.0)
-            n_flux = np.where(mask, n_flux, 0.0)
-
         return p_frac, p_flux, n_flux
 
     def tot_nucleon_flux(self, E):
@@ -1176,6 +1196,5 @@ class GlobalSplineFitBeta(PrimaryFlux):
         return np.sum(self.p_and_n_flux(E)[1:], axis=0)
 
     def _nucleus_flux(self, corsika_id, E):
-        """Dummy function, since particle fluxes are not supported
-        in the spline interface version."""
-        return np.zeros_like(E)
+        """Not available: the table holds nucleon fluxes only."""
+        raise NotImplementedError(_nucleon_only_message(self, "nucleus_flux"))

@@ -236,11 +236,10 @@ class TestGlobalSplineFitBeta:
         assert result.shape == (100,)
         assert np.all(result > 0)
 
-    def test_nucleus_flux_returns_zeros(self):
+    def test_nucleus_flux_raises(self):
         gsf = mods.GlobalSplineFitBeta()
-        E = np.logspace(1, 6, 50)
-        result = gsf.nucleus_flux(14, E)
-        assert np.all(result == 0)
+        with pytest.raises(NotImplementedError, match="neutron fluxes only"):
+            gsf.nucleus_flux(14, np.logspace(1, 6, 50))
 
 
 class TestModelVariantErrors:
@@ -267,3 +266,18 @@ class TestProtonOnlyModels:
         mod = mods.SimplePowerlaw27()
         result = mod.nucleus_flux(402, 1e4)
         assert np.all(result == 0)
+
+
+class TestNucleonOnlyModels:
+    def test_beta_raises_for_nuclei(self):
+        with pytest.warns(DeprecationWarning):
+            mod = mods.GlobalSplineFitBeta()
+        E = np.logspace(1, 3, 5)
+        for call in (
+            lambda: mod.nucleus_flux(14, E),
+            lambda: mod.total_flux(E),
+            lambda: mod.lnA(E),
+        ):
+            with pytest.raises(NotImplementedError, match="GlobalSplineFit"):
+                call()
+        assert np.all(mod.tot_nucleon_flux(E) > 0)
