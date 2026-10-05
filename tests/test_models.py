@@ -192,9 +192,9 @@ REGRESSION_DATA = [
     (mods.GaisserStanevTilav, ("4-gen",), 14, 1e4, 1.8843888749816914e-07),
     (mods.CombinedGHandHG, ("H3a",), 14, 1e4, 1.8506172134891679e-07),
     (mods.CombinedGHandHG, ("H4a",), 14, 1e4, 1.9259684487470443e-07),
-    (mods.GaisserHonda, (), 14, 1e4, 1.633752512252613e-07),
-    (mods.ZatsepinSokolskaya, ("pamela",), 14, 1e4, 1.3353e-07),
-    (mods.ZatsepinSokolskaya, ("default",), 14, 1e4, 1.9852099999999998e-07),
+    (mods.GaisserHonda, (), 14, 1e4, 1.6341728913281787e-07),
+    (mods.ZatsepinSokolskaya, ("pamela",), 14, 1e4, 1.3352566118255197e-07),
+    (mods.ZatsepinSokolskaya, ("default",), 14, 1e4, 1.9851483877268074e-07),
     (mods.Thunman, (), 14, 1e4, 2.694318427183888e-07),
     (mods.SimplePowerlaw27, (), 14, 1e4, 2.694318427183888e-07),
 ]
@@ -281,3 +281,34 @@ class TestNucleonOnlyModels:
             with pytest.raises(NotImplementedError, match="GlobalSplineFit"):
                 call()
         assert np.all(mod.tot_nucleon_flux(E) > 0)
+
+
+class TestKineticEnergyModels:
+    """Gaisser-Honda and Zatsepin-Sokolskaya are fits in kinetic energy."""
+
+    def test_gaisser_honda_kinetic_energy_per_nucleon(self):
+        mod = mods.GaisserHonda()
+        E_k = np.array([0.5, 2.0, 20.0, 300.0])  # kinetic energy per nucleon
+        for cid in mod.nucleus_ids:
+            alpha, K, b, c = mod.params[cid]
+            A = mod.Z_A(cid)[1]
+            phi = K * (E_k + b * np.exp(-c * np.sqrt(E_k))) ** -alpha
+            E = A * (E_k + mods.NUCLEON_MASS_GEV)  # total energy of the nucleus
+            np.testing.assert_allclose(mod.nucleus_flux(cid, E), phi / A, rtol=1e-12)
+        assert mod.nucleus_flux(14, 0.9)[0] == 0.0  # below the rest mass
+
+    @pytest.mark.parametrize("model", ["pamela", "default"])
+    def test_zatsepin_sokolskaya_kinetic_energy_and_modulation(self, model):
+        mod = mods.ZatsepinSokolskaya(model)
+        for cid in mod.nucleus_ids:
+            Z, A = mod.Z_A(cid)
+            M = A * mod.m_p
+            T = np.array([5.0, 50.0, 299.0, 301.0, 5e3])
+            T_is = T + Z * 0.6  # force field, Phi = 600 MV
+            P = (T**2 + 2 * M * T) / (T_is**2 + 2 * M * T_is)
+            np.testing.assert_allclose(
+                mod.nucleus_flux(cid, T + M), mod.flux(T_is, cid) * P, rtol=1e-12
+            )
+        # smooth across the former 300 GeV switch between modulated/unmodulated
+        f = mod.nucleus_flux(5626, 56 * mod.m_p + np.array([299.0, 301.0]))
+        assert f[1] / f[0] == pytest.approx((301.0 / 299.0) ** -2.6, rel=0.03)

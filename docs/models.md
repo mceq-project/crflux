@@ -39,8 +39,8 @@ $\langle\ln A\rangle$ as a function of energy per particle. Higher values indica
 | `GaisserStanevTilav` | Gaisser, Stanev, Tilav, arXiv:1303.3565 (2013) | Full range | Variants: `3-gen`, `4-gen` |
 | `CombinedGHandHG` | Fedynitch et al., PRD 86, 114024 (2012) | Full range | GH at low E, HG at high E |
 | `PolyGonato` | Hoerandel, Astropart. Phys. 19, 193 (2003) | Full range | 11 mass groups |
-| `ZatsepinSokolskaya` | Zatsepin & Sokolskaya, A&A 458, 1 (2006) | < 1-10 PeV | Variants: `default`, `pamela` |
-| `GaisserHonda` | Gaisser & Honda, ARNPS 52, 153 (2002) | < 100 TeV | Tuned to balloon data |
+| `ZatsepinSokolskaya` | Zatsepin & Sokolskaya, A&A 458, 1 (2006) | < 1-10 PeV | Variants: `default`, `pamela`; fit in kinetic energy per nucleus, force-field modulation Φ = 600 MV |
+| `GaisserHonda` | Gaisser & Honda, ARNPS 52, 153 (2002) | < 100 TeV | Tuned to balloon data; fit in kinetic energy per nucleon |
 | `Thunman` | Thunman et al., Astropart. Phys. 5, 309 (1996) | Full range | Proton-only broken power law |
 | `SimplePowerlaw27` | Based on Thunman | Below knee | Proton-only $E^{-2.7}$ |
 | `GlobalSplineFit` | Fedynitch et al., arXiv:2609.32649 (2026) | 1 GeV - $10^{11}$ GeV | Via globalsplinefit (`gsf` extra); all species, versions 2026.1/2025/2019/2017 |
@@ -58,6 +58,10 @@ Protons have ID 14. Composite nuclei: `ID = 100 * A + Z`
 | Carbon | 12 | 6 | 1206 |
 | Silicon | 28 | 14 | 2814 |
 | Iron | 56 | 26 | 5626 |
+
+All `nucleus_flux` energies are total energies of the nucleus. Models fitted
+in kinetic energy (`GaisserHonda`, `ZatsepinSokolskaya`) are converted with the
+Jacobian of that change of variable.
 
 ## Geomagnetic Cutoff
 

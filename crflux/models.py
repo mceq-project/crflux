@@ -672,9 +672,20 @@ class ZatsepinSokolskaya(PrimaryFlux):
     The model does not describe the flux above the knee. Therefore, the
     highest energies should not exceed 1-10 PeV.
 
+    The paper's spectra are functions of the kinetic energy T of the nucleus
+    (Eqs. 7-8): R = sqrt(T^2 + 2 A m_p T) / Z, and solar modulation in the
+    force-field form with Phi = 600 MV, flux(T + Z Phi) P(T). crflux
+    evaluates them at T = E - A m_p for the total energy E (dT/dE = 1) and
+    applies the modulation at all energies.
+
     Args:
       model (str): 'default' for original or 'pamela' for PAMELA parameters
     """
+
+    #: Proton mass in GeV (m_p in Eqs. 7-8 of the paper).
+    m_p = 0.938272
+    #: Force-field modulation potential in GV (Phi = 600 MV in the paper).
+    phi_mod = 0.6
 
     def __init__(self, model="pamela", **kwargs):
         super().__init__(**kwargs)
@@ -692,7 +703,6 @@ class ZatsepinSokolskaya(PrimaryFlux):
             self.f_norm[1206] = (6.75e3, 1.8e3, 30, 5.8, 7)
             self.f_norm[2814] = (5.5e3, 1.5e3, 110, 3.5, 12)
             self.f_norm[5626] = (3.5e3, 1.2e3, 750, 2.4, 20)
-            self.m_p = 0.983
         elif model == "default":
             self.name = "Zatsepin-Sokolskaya"
             self.sname = "ZS"
@@ -707,7 +717,6 @@ class ZatsepinSokolskaya(PrimaryFlux):
             self.f_norm[1206] = (6.75e3, 1.8e3, 30, 5.8, 7)
             self.f_norm[2814] = (5.5e3, 1.5e3, 110, 3.5, 12)
             self.f_norm[5626] = (3.5e3, 1.2e3, 750, 2.4, 20)
-            self.m_p = 0.983
         else:
             raise Exception(
                 f"{self.__class__.__name__}():: Unknown model selection '{model}'."
@@ -736,12 +745,12 @@ class ZatsepinSokolskaya(PrimaryFlux):
         return 1.0 / Z * np.sqrt(E**2 + 2 * self.m_p * A * E)
 
     def f_mod(self, E, corsika_id):
-        Z = self.Z_A(corsika_id)[0]
-
-        P = (E**2 + 2 * self.m_p * E) / (
-            (E + Z * 0.511e-3 * 0.6) ** 2 + 2 * self.m_p * (E + Z * 0.511e-3 * 0.6)
-        )
-        return self.flux(E + Z * 0.511e-3 * 0.6, corsika_id) * P
+        """Force-field modulated flux at kinetic energy ``E`` of the nucleus."""
+        Z, A = self.Z_A(corsika_id)
+        M = A * self.m_p
+        E_is = E + Z * self.phi_mod
+        P = (E**2 + 2 * M * E) / (E_is**2 + 2 * M * E_is)
+        return self.flux(E_is, corsika_id) * P
 
     def dN_dR(self, R, corsika_id, gen):
         return (
@@ -769,13 +778,11 @@ class ZatsepinSokolskaya(PrimaryFlux):
     def _nucleus_flux(self, corsika_id, E):
         corsika_id = self._find_nearby_id(corsika_id)
         E = np.atleast_1d(np.asarray(E, dtype=float))
-        result = np.empty_like(E)
-        lo = E < 300
-        hi = ~lo
-        if np.any(lo):
-            result[lo] = self.f_mod(E[lo], corsika_id)
-        if np.any(hi):
-            result[hi] = self.flux(E[hi], corsika_id)
+        T = E - self.Z_A(corsika_id)[1] * self.m_p
+        result = np.zeros_like(E)
+        above = T > 0
+        if np.any(above):
+            result[above] = self.f_mod(T[above], corsika_id)
         return result
 
 
@@ -786,6 +793,12 @@ class GaisserHonda(PrimaryFlux):
     This model was tuned to lower energy baloon data. It fails to
     describe the flux at and above the knee. A safe range for using
     it is < 100 TeV/nucleon.
+
+    The fit phi(E_k) = K (E_k + b exp(-c sqrt(E_k)))^-alpha (Eq. 10 and
+    Table 2 of the paper; Honda et al., PRD 70, 043008 (2004), Eq. 1) gives
+    the nuclei per GeV of kinetic energy per nucleon E_k. crflux evaluates it
+    at E_k = E/A - :data:`NUCLEON_MASS_GEV` for the total energy E of the
+    nucleus and divides by A (dE_k/dE = 1/A).
     """
 
     def __init__(self, *args, **kwargs):
@@ -809,7 +822,13 @@ class GaisserHonda(PrimaryFlux):
         b = self.params[corsika_id][2]
         c = self.params[corsika_id][3]
 
-        return K / A * (E / A + b * np.exp(-c * np.sqrt(E / A))) ** -alpha
+        E = np.atleast_1d(np.asarray(E, dtype=float))
+        E_k = E / A - NUCLEON_MASS_GEV
+        flux = np.zeros_like(E)
+        above = E_k > 0
+        e_k = E_k[above]
+        flux[above] = K / A * (e_k + b * np.exp(-c * np.sqrt(e_k))) ** -alpha
+        return flux
 
 
 class Thunman(PrimaryFlux):
