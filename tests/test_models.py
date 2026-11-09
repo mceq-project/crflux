@@ -45,6 +45,27 @@ class TestFindNearbyId:
         # the former Fe-54 id still resolves to Fe-56
         assert mod._find_nearby_id(5426) == 5626
 
+    @pytest.mark.parametrize(
+        "make",
+        [
+            lambda **kw: mods.PolyGonato(**kw),
+            lambda **kw: mods.HillasGaisser2012("H3a", **kw),
+            lambda **kw: mods.GaisserStanevTilav("3-gen", **kw),
+            lambda **kw: mods.GaisserHonda(**kw),
+            lambda **kw: mods.ZatsepinSokolskaya("pamela", **kw),
+        ],
+    )
+    def test_legacy_iron_id_is_fe56(self, make):
+        """5426 gives the Fe-56 spectrum and the Fe-56 cutoff in every model."""
+        mod = make(geomagnetic_cutoff=7.0)
+        assert mod._find_nearby_id(5426) == mod._find_nearby_id(5626)
+        e_cut = mod.cutoff_energy(26, 56, 7.0)
+        E = np.array([0.999 * e_cut, 1.001 * e_cut, 1e3, 1e6])
+        assert mod.nucleus_flux(5426, E)[0] == 0.0
+        np.testing.assert_array_equal(
+            mod.nucleus_flux(5426, E), mod.nucleus_flux(5626, E)
+        )
+
     def test_nearby_match(self):
         mod = mods.HillasGaisser2012("H3a")
         # 1407 (N) is not in HG2012, closest is 1206 (C, A=12) or 2814 (Si)

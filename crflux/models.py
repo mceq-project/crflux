@@ -44,6 +44,9 @@ import numpy as np
 #: The rest mass of a nucleus with mass number A is taken as A times this value.
 NUCLEON_MASS_GEV = 0.93891872965
 
+#: Former corsika ids, mapped to the current ones (iron was Fe-54 before 2.2.0).
+LEGACY_IDS = {5426: 5626}
+
 
 def _nucleon_only_message(model, what):
     return (
@@ -113,6 +116,7 @@ class PrimaryFlux(metaclass=ABCMeta):
           in :math:`(\\text{m}^2 \\text{s sr GeV})^{-1}`
         """
         E = np.atleast_1d(np.asarray(E, dtype=float))
+        corsika_id = LEGACY_IDS.get(corsika_id, corsika_id)
         flux = self._nucleus_flux(corsika_id, E)
         if self.geomagnetic_cutoff:
             Z, A = self.Z_A(corsika_id)
@@ -281,6 +285,7 @@ class PrimaryFlux(metaclass=ABCMeta):
           Exception: if no nucleus with mass number closer than delta_A can
             be found in parameters
         """
+        corsika_id = LEGACY_IDS.get(corsika_id, corsika_id)
         if corsika_id in self.nucleus_ids:
             return corsika_id
 
