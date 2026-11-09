@@ -22,7 +22,7 @@ air-shower cascade research code [MCEq: Matrix Cascade Equations (MCEq)](https:/
 
 ## Requirements
 
-Python >= 3.9, numpy, scipy.
+Python >= 3.10, numpy, scipy.
 
 ## Installation
 

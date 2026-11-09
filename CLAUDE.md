@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-`crflux` is a Python (>= 3.9) package providing parameterizations of the cosmic ray flux at the top of Earth's atmosphere. It is a dependency of [MCEq](https://github.com/afedynitch/MCEq). Provides numerical models of high-energy cosmic ray fluxes, all-particle to all-nucleon flux conversions, geomagnetic cutoff support, and convenience functions for atmospheric lepton flux calculations.
+`crflux` is a Python (>= 3.10) package providing parameterizations of the cosmic ray flux at the top of Earth's atmosphere. It is a dependency of [MCEq](https://github.com/afedynitch/MCEq). Provides numerical models of high-energy cosmic ray fluxes, all-particle to all-nucleon flux conversions, geomagnetic cutoff support, and convenience functions for atmospheric lepton flux calculations.
 
 ## Commands
 
@@ -33,7 +33,7 @@ The entire model library lives in `crflux/models.py`.
 
 GitHub Actions (`.github/workflows/tests.yml`) runs on push/PR to `main`:
 - ruff lint and format checks
-- pytest across Python 3.9–3.13
+- pytest across Python 3.10–3.15
 
 Docs auto-deploy to gh-pages on push to `main` (`.github/workflows/docs.yml`).
 

@@ -28,7 +28,7 @@ pfrac_cut, p_cut, n_cut = model_cut.p_and_n_flux(E)
 
 ## Requirements
 
-Python >= 3.9, numpy, scipy.
+Python >= 3.10, numpy, scipy.
 
 ## Citation
 
