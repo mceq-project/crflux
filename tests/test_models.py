@@ -25,14 +25,14 @@ class TestZA:
 
     def test_iron(self):
         pf = mods.HillasGaisser2012("H3a")
-        Z, A = pf.Z_A(5426)
+        Z, A = pf.Z_A(5626)
         assert Z == 26
-        assert A == 54
+        assert A == 56
 
     def test_integer_A(self):
         """Z_A should return integer A, not float."""
         pf = mods.HillasGaisser2012("H3a")
-        _, A = pf.Z_A(5426)
+        _, A = pf.Z_A(5626)
         assert isinstance(A, int)
 
 
@@ -40,7 +40,31 @@ class TestFindNearbyId:
     def test_exact_match(self):
         mod = mods.HillasGaisser2012("H3a")
         assert mod._find_nearby_id(14) == 14
-        assert mod._find_nearby_id(5426) == 5426
+        assert mod._find_nearby_id(5626) == 5626
+        assert 5626 in mod.nucleus_ids and 5426 not in mod.nucleus_ids
+        # the former Fe-54 id still resolves to Fe-56
+        assert mod._find_nearby_id(5426) == 5626
+
+    @pytest.mark.parametrize(
+        "make",
+        [
+            lambda **kw: mods.PolyGonato(**kw),
+            lambda **kw: mods.HillasGaisser2012("H3a", **kw),
+            lambda **kw: mods.GaisserStanevTilav("3-gen", **kw),
+            lambda **kw: mods.GaisserHonda(**kw),
+            lambda **kw: mods.ZatsepinSokolskaya("pamela", **kw),
+        ],
+    )
+    def test_legacy_iron_id_is_fe56(self, make):
+        """5426 gives the Fe-56 spectrum and the Fe-56 cutoff in every model."""
+        mod = make(geomagnetic_cutoff=7.0)
+        assert mod._find_nearby_id(5426) == mod._find_nearby_id(5626)
+        e_cut = mod.cutoff_energy(26, 56, 7.0)
+        E = np.array([0.999 * e_cut, 1.001 * e_cut, 1e3, 1e6])
+        assert mod.nucleus_flux(5426, E)[0] == 0.0
+        np.testing.assert_array_equal(
+            mod.nucleus_flux(5426, E), mod.nucleus_flux(5626, E)
+        )
 
     def test_nearby_match(self):
         mod = mods.HillasGaisser2012("H3a")
@@ -158,6 +182,27 @@ class TestDelta0:
         assert np.all(result >= -1)
         assert np.all(result <= 1)
 
+    @pytest.mark.parametrize(
+        "cls,args",
+        [
+            (mods.HillasGaisser2012, ("H3a",)),
+            (mods.GaisserStanevTilav, ("4-gen",)),
+            (mods.GaisserHonda, ()),
+        ],
+    )
+    def test_matches_p_and_n(self, cls, args):
+        mod = cls(*args)
+        E = np.logspace(1, 9, 25)
+        _, p, n = mod.p_and_n_flux(E)
+        np.testing.assert_allclose(mod.delta_0(E), (p - n) / (p + n), rtol=1e-12)
+
+    def test_nucleon_only_model(self):
+        with pytest.warns(DeprecationWarning):
+            mod = mods.GlobalSplineFitBeta()
+        E = np.logspace(1, 6, 10)
+        _, p, n = mod.p_and_n_flux(E)
+        np.testing.assert_allclose(mod.delta_0(E), (p - n) / (p + n))
+
 
 # Numerical regression tests at E = 1e4 GeV for proton flux
 REGRESSION_DATA = [
@@ -168,9 +213,9 @@ REGRESSION_DATA = [
     (mods.GaisserStanevTilav, ("4-gen",), 14, 1e4, 1.8843888749816914e-07),
     (mods.CombinedGHandHG, ("H3a",), 14, 1e4, 1.8506172134891679e-07),
     (mods.CombinedGHandHG, ("H4a",), 14, 1e4, 1.9259684487470443e-07),
-    (mods.GaisserHonda, (), 14, 1e4, 1.633752512252613e-07),
-    (mods.ZatsepinSokolskaya, ("pamela",), 14, 1e4, 1.3353e-07),
-    (mods.ZatsepinSokolskaya, ("default",), 14, 1e4, 1.9852099999999998e-07),
+    (mods.GaisserHonda, (), 14, 1e4, 1.6341728913281787e-07),
+    (mods.ZatsepinSokolskaya, ("pamela",), 14, 1e4, 1.3352566118255197e-07),
+    (mods.ZatsepinSokolskaya, ("default",), 14, 1e4, 1.9851483877268074e-07),
     (mods.Thunman, (), 14, 1e4, 2.694318427183888e-07),
     (mods.SimplePowerlaw27, (), 14, 1e4, 2.694318427183888e-07),
 ]
@@ -212,11 +257,10 @@ class TestGlobalSplineFitBeta:
         assert result.shape == (100,)
         assert np.all(result > 0)
 
-    def test_nucleus_flux_returns_zeros(self):
+    def test_nucleus_flux_raises(self):
         gsf = mods.GlobalSplineFitBeta()
-        E = np.logspace(1, 6, 50)
-        result = gsf.nucleus_flux(14, E)
-        assert np.all(result == 0)
+        with pytest.raises(NotImplementedError, match="neutron fluxes only"):
+            gsf.nucleus_flux(14, np.logspace(1, 6, 50))
 
 
 class TestModelVariantErrors:
@@ -243,3 +287,62 @@ class TestProtonOnlyModels:
         mod = mods.SimplePowerlaw27()
         result = mod.nucleus_flux(402, 1e4)
         assert np.all(result == 0)
+
+
+class TestNucleonOnlyModels:
+    def test_beta_raises_for_nuclei(self):
+        with pytest.warns(DeprecationWarning):
+            mod = mods.GlobalSplineFitBeta()
+        E = np.logspace(1, 3, 5)
+        for call in (
+            lambda: mod.nucleus_flux(14, E),
+            lambda: mod.total_flux(E),
+            lambda: mod.lnA(E),
+        ):
+            with pytest.raises(NotImplementedError, match="GlobalSplineFit"):
+                call()
+        assert np.all(mod.tot_nucleon_flux(E) > 0)
+
+
+class TestKineticEnergyModels:
+    """Gaisser-Honda and Zatsepin-Sokolskaya are fits in kinetic energy."""
+
+    def test_gaisser_honda_kinetic_energy_per_nucleon(self):
+        mod = mods.GaisserHonda()
+        E_k = np.array([0.5, 2.0, 20.0, 300.0])  # kinetic energy per nucleon
+        for cid in mod.nucleus_ids:
+            alpha, K, b, c = mod.params[cid]
+            A = mod.Z_A(cid)[1]
+            phi = K * (E_k + b * np.exp(-c * np.sqrt(E_k))) ** -alpha
+            E = A * (E_k + mods.NUCLEON_MASS_GEV)  # total energy of the nucleus
+            np.testing.assert_allclose(mod.nucleus_flux(cid, E), phi / A, rtol=1e-12)
+        assert mod.nucleus_flux(14, 0.9)[0] == 0.0  # below the rest mass
+
+    def test_gaisser_honda_is_table_2(self):
+        """Central values of GH 2002 Table 2 (He "high"); CNO at A = 14, Mg-Si at A = 25."""
+        assert mods.GaisserHonda().params == {
+            14: (2.74, 14900, 2.15, 0.21),
+            402: (2.64, 600, 1.25, 0.14),
+            1407: (2.60, 33.2, 0.97, 0.01),
+            2512: (2.79, 34.2, 2.14, 0.01),
+            5626: (2.68, 4.45, 3.07, 0.41),
+        }
+        # cH3a/cH4a (PRD 86, 114024) keep GH on the HG groups
+        legacy = mods.CombinedGHandHG("H3a").leModel
+        assert sorted(legacy.nucleus_ids) == [14, 402, 1206, 2814, 5626]
+
+    @pytest.mark.parametrize("model", ["pamela", "default"])
+    def test_zatsepin_sokolskaya_kinetic_energy_and_modulation(self, model):
+        mod = mods.ZatsepinSokolskaya(model)
+        for cid in mod.nucleus_ids:
+            Z, A = mod.Z_A(cid)
+            M = A * mod.m_p
+            T = np.array([5.0, 50.0, 299.0, 301.0, 5e3])
+            T_is = T + Z * 0.6  # force field, Phi = 600 MV
+            P = (T**2 + 2 * M * T) / (T_is**2 + 2 * M * T_is)
+            np.testing.assert_allclose(
+                mod.nucleus_flux(cid, T + M), mod.flux(T_is, cid) * P, rtol=1e-12
+            )
+        # smooth across the former 300 GeV switch between modulated/unmodulated
+        f = mod.nucleus_flux(5626, 56 * mod.m_p + np.array([299.0, 301.0]))
+        assert f[1] / f[0] == pytest.approx((301.0 / 299.0) ** -2.6, rel=0.03)

@@ -39,8 +39,8 @@ $\langle\ln A\rangle$ as a function of energy per particle. Higher values indica
 | `GaisserStanevTilav` | Gaisser, Stanev, Tilav, arXiv:1303.3565 (2013) | Full range | Variants: `3-gen`, `4-gen` |
 | `CombinedGHandHG` | Fedynitch et al., PRD 86, 114024 (2012) | Full range | GH at low E, HG at high E |
 | `PolyGonato` | Hoerandel, Astropart. Phys. 19, 193 (2003) | Full range | 11 mass groups |
-| `ZatsepinSokolskaya` | Zatsepin & Sokolskaya, A&A 458, 1 (2006) | < 1-10 PeV | Variants: `default`, `pamela` |
-| `GaisserHonda` | Gaisser & Honda, ARNPS 52, 153 (2002) | < 100 TeV | Tuned to balloon data |
+| `ZatsepinSokolskaya` | Zatsepin & Sokolskaya, A&A 458, 1 (2006) | < 1-10 PeV | Variants: `default`, `pamela`; fit in kinetic energy per nucleus, force-field modulation Φ = 600 MV |
+| `GaisserHonda` | Gaisser & Honda, ARNPS 52, 153 (2002) | < 100 TeV | Tuned to balloon data; fit in kinetic energy per nucleon; Table 2 central values, CNO as 1407 (A = 14), Mg-Si as 2512 (A = 25) |
 | `Thunman` | Thunman et al., Astropart. Phys. 5, 309 (1996) | Full range | Proton-only broken power law |
 | `SimplePowerlaw27` | Based on Thunman | Below knee | Proton-only $E^{-2.7}$ |
 | `GlobalSplineFit` | Fedynitch et al., arXiv:2609.32649 (2026) | 1 GeV - $10^{11}$ GeV | Via globalsplinefit (`gsf` extra); all species, versions 2026.1/2025/2019/2017 |
@@ -57,13 +57,21 @@ Protons have ID 14. Composite nuclei: `ID = 100 * A + Z`
 | Helium | 4 | 2 | 402 |
 | Carbon | 12 | 6 | 1206 |
 | Silicon | 28 | 14 | 2814 |
-| Iron | 54 | 26 | 5426 |
+| Iron | 56 | 26 | 5626 |
+
+All `nucleus_flux` energies are total energies of the nucleus. Models fitted
+in kinetic energy (`GaisserHonda`, `ZatsepinSokolskaya`) are converted with the
+Jacobian of that change of variable.
 
 ## Geomagnetic Cutoff
 
 All models accept `geomagnetic_cutoff` (in GV) as a constructor parameter.
-For a nucleus with charge $Z$, the energy cutoff is $E_\text{cut} = Z \times R_\text{cut}$ (GeV).
-Flux is zeroed below this energy.
+It is a cut in rigidity: the flux of a nucleus with charge $Z$ and mass number
+$A$ is zeroed where its momentum $p = \sqrt{E^2 - M^2}$ is below $Z R_\text{cut}$,
+with $E$ the total energy of the nucleus and $M = A \times 0.93892$ GeV (mean
+nucleon mass, as in globalsplinefit). The energy threshold is
+$E_\text{cut} = \sqrt{(Z R_\text{cut})^2 + M^2}$, which tends to $Z R_\text{cut}$
+for $E \gg M$. `None` or 0 means no cutoff.
 
 ```python
 import crflux.models as mods
@@ -106,6 +114,12 @@ fraction, proton, neutron = varied.p_and_n_flux(np.logspace(0, 8, 50))
 Energies are total GeV (per nucleus for `nucleus_flux`, per nucleon for
 `p_and_n_flux`). `time_interval` selects the solar-modulation period (default
 Solar Cycle 24, `"LIS"` for none). `geomagnetic_cutoff` is applied by
-globalsplinefit per species in rigidity. Kinetic-energy reductions are rejected.
+globalsplinefit per species in rigidity, with a sigmoid transition of width
+`cutoff_width` (default 1 GV; 0 = sharp step); a cutoff of 0 is no cutoff.
+Kinetic-energy reductions are rejected.
 `GlobalSplineFitBeta` is deprecated: its table is GSF 2017 at a fixed
 φ = 554 MV, i.e. `GlobalSplineFit(version="2017", time_interval=(199807, 199808))`.
+Having no composition, it refuses a `geomagnetic_cutoff` (`ValueError`), and
+its `nucleus_flux`, `total_flux` and `lnA` raise `NotImplementedError`, as do
+those of `GlobalSplineFitReduced`. The reduced model does take a cutoff: it is
+applied per species by globalsplinefit before the reduction.

@@ -40,6 +40,21 @@ from abc import ABCMeta, abstractmethod
 
 import numpy as np
 
+#: Mean nucleon mass in GeV, (m_p + m_n)/2, the value globalsplinefit uses.
+#: The rest mass of a nucleus with mass number A is taken as A times this value.
+NUCLEON_MASS_GEV = 0.93891872965
+
+#: Former corsika ids, mapped to the current ones (iron was Fe-54 before 2.2.0).
+LEGACY_IDS = {5426: 5626}
+
+
+def _nucleon_only_message(model, what):
+    return (
+        f"{model.__class__.__name__} provides proton and neutron fluxes only, "
+        f"no per-nucleus fluxes ({what}). Use crflux.models.GlobalSplineFit, "
+        "the full per-species GSF model."
+    )
+
 
 def _get_closest(value, in_list):
     """Compares the parameters ``value`` with values of the
@@ -61,8 +76,12 @@ class PrimaryFlux(metaclass=ABCMeta):
 
     Args:
       geomagnetic_cutoff (float, optional): rigidity cutoff in GV. If set,
-        the flux is zeroed below the corresponding energy for each nucleus.
-        For a nucleus with charge Z, the energy cutoff is E_cut = Z * R_cut.
+        the flux of each nucleus is zeroed below rigidity R_cut, i.e. where
+        its momentum p = sqrt(E**2 - M**2) is below Z * R_cut. ``E`` is the
+        total energy of the nucleus and M = A * :data:`NUCLEON_MASS_GEV` its
+        rest mass, so the energy threshold is
+        E_cut = sqrt((Z * R_cut)**2 + M**2), which tends to Z * R_cut for
+        E >> M. ``None`` or 0 means no cutoff.
     """
 
     def __init__(self, geomagnetic_cutoff=None):
@@ -97,12 +116,28 @@ class PrimaryFlux(metaclass=ABCMeta):
           in :math:`(\\text{m}^2 \\text{s sr GeV})^{-1}`
         """
         E = np.atleast_1d(np.asarray(E, dtype=float))
+        corsika_id = LEGACY_IDS.get(corsika_id, corsika_id)
         flux = self._nucleus_flux(corsika_id, E)
-        if self.geomagnetic_cutoff is not None:
+        if self.geomagnetic_cutoff:
             Z, A = self.Z_A(corsika_id)
-            E_cut = Z * self.geomagnetic_cutoff
-            flux = np.where(E >= E_cut, flux, 0.0)
+            flux = np.where(
+                E >= self.cutoff_energy(Z, A, self.geomagnetic_cutoff), flux, 0.0
+            )
         return flux
+
+    @staticmethod
+    def cutoff_energy(Z, A, rigidity):
+        """Total energy of a nucleus (Z, A) with rigidity ``rigidity``.
+
+        Args:
+          Z (int): charge
+          A (int): mass number
+          rigidity (float or numpy.ndarray): rigidity in GV
+        Returns:
+          (float or numpy.ndarray): total energy sqrt((Z R)^2 + M^2) in GeV,
+          with M = A * :data:`NUCLEON_MASS_GEV`
+        """
+        return np.sqrt((Z * rigidity) ** 2 + (A * NUCLEON_MASS_GEV) ** 2)
 
     def total_flux(self, E):
         """Returns total flux of nuclei, the "all-particle-flux".
@@ -113,6 +148,7 @@ class PrimaryFlux(metaclass=ABCMeta):
           (numpy.ndarray): particle flux in :math:`\\Phi_{particles}` in
           :math:`(\\text{m}^2 \\text{s sr GeV})^{-1}`
         """
+        self._require_nuclei("total_flux")
         return sum(self.nucleus_flux(corsika_id, E) for corsika_id in self.nucleus_ids)
 
     def tot_nucleon_flux(self, E):
@@ -167,32 +203,19 @@ class PrimaryFlux(metaclass=ABCMeta):
         """Returns proton excess.
 
         The proton excess is defined as
-        :math:`\\delta_0 = \\frac{\\Phi_p - \\Phi_n}{\\Phi_p + \\Phi_n}`.
+        :math:`\\delta_0 = \\frac{\\Phi_p - \\Phi_n}{\\Phi_p + \\Phi_n}`,
+        with the nucleon fluxes from :meth:`p_and_n_flux`.
 
         Args:
           E (float or numpy.ndarray): laboratory energy of nucleons in GeV
         Returns:
           (numpy.ndarray): proton excess :math:`\\delta_0`
         """
-        p_0 = 0.0
-        n_0 = 0.0
-
-        p_0 += self.nucleus_flux(14, E)
-
-        p_0 += 2.0**2 * self.nucleus_flux(402, E * 4.0)
-        n_0 += 2.0**2 * self.nucleus_flux(402, E * 4.0)
-
-        p_0 += 6.0**2 * self.nucleus_flux(1206, E * 12.0)
-        n_0 += 6.0**2 * self.nucleus_flux(1206, E * 12.0)
-
-        p_0 += 14.0**2 * self.nucleus_flux(2814, E * 28.0)
-        n_0 += 14.0**2 * self.nucleus_flux(2814, E * 28.0)
-
-        a_fe = self.Z_A(5426)[1]
-        p_0 += 26.0**2 * self.nucleus_flux(5426, E * a_fe)
-        n_0 += 26.0**2 * self.nucleus_flux(5426, E * a_fe)
-
-        return (p_0 - n_0) / (p_0 + n_0)
+        _, p_0, n_0 = self.p_and_n_flux(E)
+        total = p_0 + n_0
+        return np.divide(
+            p_0 - n_0, total, out=np.zeros_like(total, dtype=float), where=total > 0
+        )
 
     def p_and_n_flux(self, E):
         """Returns tuple with proton fraction, proton flux and neutron flux.
@@ -232,6 +255,7 @@ class PrimaryFlux(metaclass=ABCMeta):
         Returns:
           (numpy.ndarray): mean (natural) logarithmic mass
         """
+        self._require_nuclei("lnA")
         sum_weight = 0.0
 
         for cid in self.nucleus_ids:
@@ -240,6 +264,11 @@ class PrimaryFlux(metaclass=ABCMeta):
             sum_weight += np.log(self.Z_A(cid)[1]) * self.nucleus_flux(cid, E)
 
         return sum_weight / self.total_flux(E)
+
+    def _require_nuclei(self, method):
+        """Raise for nucleon-only models, which have no per-nucleus fluxes."""
+        if not self.nucleus_ids:
+            raise NotImplementedError(_nucleon_only_message(self, method))
 
     def _find_nearby_id(self, corsika_id, delta_A=3):
         """Looks in :attr:`self.params` for a nucleus with same ``corsika_id``
@@ -256,6 +285,7 @@ class PrimaryFlux(metaclass=ABCMeta):
           Exception: if no nucleus with mass number closer than delta_A can
             be found in parameters
         """
+        corsika_id = LEGACY_IDS.get(corsika_id, corsika_id)
         if corsika_id in self.nucleus_ids:
             return corsika_id
 
@@ -315,7 +345,7 @@ class PolyGonato(PrimaryFlux):
         self.params[2613] = (1.15e-3, 2.66, 13)  # Al
         self.params[2814] = (7.96e-3, 2.75, 14)  # Si
         self.params[5025] = (1.35e-3, 2.46, 25)  # Mn
-        self.params[5426] = (2.04e-2, 2.59, 26)  # Fe
+        self.params[5626] = (2.04e-2, 2.59, 26)  # Fe
         self.params[5427] = (7.51e-5, 2.72, 27)  # Co
 
         self.nucleus_ids = list(self.params.keys())
@@ -356,7 +386,7 @@ class _BenzviMontaruli(PrimaryFlux):
         self.params[1608] = (320.0, 3.828e-5, -2.741, 3200.0, -2.503)  # O
         self.params[2412] = (400.0, 4.458e-5, -2.741, 4800.0, -2.503)  # Mg
         self.params[2814] = (560.0, 4.314e-5, -2.741, 5600.0, -2.503)  # Si
-        self.params[5426] = (1120.0, 1.659e-5, -2.741, 11200.0, -2.503)  # Fe
+        self.params[5626] = (1120.0, 1.659e-5, -2.741, 11200.0, -2.503)  # Fe
 
         self.nucleus_ids = list(self.params.keys())
 
@@ -400,7 +430,7 @@ class HillasGaisser2012(PrimaryFlux):
         self.params = {}
         self.rid_cutoff = {}
 
-        mass_comp = [14, 402, 1206, 2814, 5426]
+        mass_comp = [14, 402, 1206, 2814, 5626]
         for mcomp in mass_comp:
             self.params[mcomp] = {}
 
@@ -411,13 +441,13 @@ class HillasGaisser2012(PrimaryFlux):
         self.params[402][1] = (3550, 1.58, 2)  # He
         self.params[1206][1] = (2200, 1.63, 6)  # CNO
         self.params[2814][1] = (1430, 1.67, 14)  # MgAlSi
-        self.params[5426][1] = (2120, 1.63, 26)  # Fe
+        self.params[5626][1] = (2120, 1.63, 26)  # Fe
 
         self.params[14][2] = (20, 1.4, 1)  # H
         self.params[402][2] = (20, 1.4, 2)  # He
         self.params[1206][2] = (13.4, 1.4, 6)  # CNO
         self.params[2814][2] = (13.4, 1.4, 14)  # MgAlSi
-        self.params[5426][2] = (13.4, 1.4, 26)  # Fe
+        self.params[5626][2] = (13.4, 1.4, 26)  # Fe
 
         if self.model == "H3a":
             self.rid_cutoff[3] = 2e9
@@ -425,14 +455,14 @@ class HillasGaisser2012(PrimaryFlux):
             self.params[402][3] = (1.7, 1.4, 2)  # He
             self.params[1206][3] = (1.14, 1.4, 6)  # CNO
             self.params[2814][3] = (1.14, 1.4, 14)  # MgAlSi
-            self.params[5426][3] = (1.14, 1.4, 26)  # Fe
+            self.params[5626][3] = (1.14, 1.4, 26)  # Fe
         elif self.model == "H4a":
             self.rid_cutoff[3] = 60e9
             self.params[14][3] = (200.0, 1.6, 1)  # H
             self.params[402][3] = (0, 1.4, 2)  # He
             self.params[1206][3] = (0, 1.4, 6)  # CNO
             self.params[2814][3] = (0, 1.4, 14)  # MgAlSi
-            self.params[5426][3] = (0, 1.4, 26)  # Fe
+            self.params[5626][3] = (0, 1.4, 26)  # Fe
         else:
             raise Exception("HillasGaisser2012(): Unknown model version requested.")
 
@@ -473,13 +503,13 @@ class H3a_polygonato(HillasGaisser2012):
         self.params[402][1] = (4750, 1.64, 2)  # He
         self.params[1206][1] = (3860, 1.67, 6)  # CNO
         self.params[2814][1] = (3120, 1.70, 14)  # MgAlSi
-        self.params[5426][1] = (1080, 1.55, 26)  # Fe
+        self.params[5626][1] = (1080, 1.55, 26)  # Fe
 
         self.params[14][2] = (11.8, 1.4, 1)  # H
         self.params[402][2] = (11.8, 1.4, 2)  # He
         self.params[1206][2] = (7.88, 1.4, 6)  # CNO
         self.params[2814][2] = (7.88, 1.4, 14)  # MgAlSi
-        self.params[5426][2] = (7.88, 1.4, 26)  # Fe
+        self.params[5626][2] = (7.88, 1.4, 26)  # Fe
 
 
 class GaisserStanevTilav(PrimaryFlux):
@@ -507,7 +537,7 @@ class GaisserStanevTilav(PrimaryFlux):
         self.rid_cutoff[1] = 120e3
         self.rid_cutoff[2] = 4e6
 
-        mass_comp = [14, 402, 1206, 1608, 5426, 12852, 20180]
+        mass_comp = [14, 402, 1206, 1608, 5626, 12852, 20180]
         for mcomp in mass_comp:
             self.params[mcomp] = {}
 
@@ -515,7 +545,7 @@ class GaisserStanevTilav(PrimaryFlux):
         self.params[402][1] = (3200, 1.58, 2)  # He
         self.params[1206][1] = (100, 1.4, 6)  # C
         self.params[1608][1] = (130, 1.4, 8)  # O
-        self.params[5426][1] = (60, 1.3, 26)  # Fe
+        self.params[5626][1] = (60, 1.3, 26)  # Fe
         self.params[12852][1] = (0, 1.0, 52)  # Te
         self.params[20180][1] = (0, 1.0, 80)  # Hg
 
@@ -525,7 +555,7 @@ class GaisserStanevTilav(PrimaryFlux):
         self.params[1608][2] = (7, 1.3, 8)  # O
 
         if self.model == "3-gen":
-            self.params[5426][2] = (2.3, 1.2, 26)  # Fe
+            self.params[5626][2] = (2.3, 1.2, 26)  # Fe
             self.params[12852][2] = (0.1, 1.2, 52)  # Te
             self.params[20180][2] = (0.4, 1.2, 80)  # Hg
             self.rid_cutoff[3] = 1.3e9
@@ -534,12 +564,12 @@ class GaisserStanevTilav(PrimaryFlux):
             self.params[402][3] = (0, 1.4, 2)  # He
             self.params[1206][3] = (0, 1.4, 6)  # CNO
             self.params[1608][3] = (0, 1.3, 8)  # O
-            self.params[5426][3] = (0.025, 1.2, 26)  # Fe
+            self.params[5626][3] = (0.025, 1.2, 26)  # Fe
             self.params[12852][3] = (0, 1.0, 52)  # Te
             self.params[20180][3] = (0, 1.0, 80)  # Hg
 
         elif self.model == "4-gen":
-            self.params[5426][2] = (2.1, 1.2, 26)  # Fe
+            self.params[5626][2] = (2.1, 1.2, 26)  # Fe
             self.params[12852][2] = (0.1, 1.2, 52)  # Te
             self.params[20180][2] = (0.53, 1.2, 80)  # Hg
 
@@ -548,7 +578,7 @@ class GaisserStanevTilav(PrimaryFlux):
             self.params[402][3] = (0, 1.4, 2)  # He
             self.params[1206][3] = (0, 1.4, 6)  # CNO
             self.params[1608][3] = (0, 1.3, 8)  # O
-            self.params[5426][3] = (0.011, 1.2, 26)  # Fe
+            self.params[5626][3] = (0.011, 1.2, 26)  # Fe
             self.params[12852][3] = (0, 1.0, 52)  # Te
             self.params[20180][3] = (0, 1.0, 80)  # Hg
 
@@ -557,7 +587,7 @@ class GaisserStanevTilav(PrimaryFlux):
             self.params[402][4] = (0, 0, 2)  # He
             self.params[1206][4] = (0, 0, 6)  # CNO
             self.params[1608][4] = (0, 0, 8)  # O
-            self.params[5426][4] = (0, 0, 26)  # Fe
+            self.params[5626][4] = (0, 0, 26)  # Fe
             self.params[12852][4] = (0, 1.0, 52)  # Te
             self.params[20180][4] = (0, 1.0, 80)  # Hg
         else:
@@ -603,9 +633,16 @@ class CombinedGHandHG(PrimaryFlux):
         self.sname = "c" + model
         self.params = {}
         self.leModel = GaisserHonda(**kwargs)
+        # PRD 86, 114024 ran GH on the HG groups: CNO as 1206 and Mg-Si as 2814,
+        # the latter with alpha + 1 sigma and K - 1 sigma
+        gh = self.leModel.params
+        gh[1206] = gh.pop(1407)
+        del gh[2512]
+        gh[2814] = (2.79 + 0.08, 34.2 - 6.0, 2.14, 0.01)
+        self.leModel.nucleus_ids = list(gh)
         self.heModel = HillasGaisser2012(model, **kwargs)
         self.heCutOff = 1e5
-        cid_list = [14, 402, 1206, 2814, 5426]
+        cid_list = [14, 402, 1206, 2814, 5626]
 
         # Store low- to high-energy model transitions in params
         for cid in cid_list:
@@ -647,9 +684,20 @@ class ZatsepinSokolskaya(PrimaryFlux):
     The model does not describe the flux above the knee. Therefore, the
     highest energies should not exceed 1-10 PeV.
 
+    The paper's spectra are functions of the kinetic energy T of the nucleus
+    (Eqs. 7-8): R = sqrt(T^2 + 2 A m_p T) / Z, and solar modulation in the
+    force-field form with Phi = 600 MV, flux(T + Z Phi) P(T). crflux
+    evaluates them at T = E - A m_p for the total energy E (dT/dE = 1) and
+    applies the modulation at all energies.
+
     Args:
       model (str): 'default' for original or 'pamela' for PAMELA parameters
     """
+
+    #: Proton mass in GeV (m_p in Eqs. 7-8 of the paper).
+    m_p = 0.938272
+    #: Force-field modulation potential in GV (Phi = 600 MV in the paper).
+    phi_mod = 0.6
 
     def __init__(self, model="pamela", **kwargs):
         super().__init__(**kwargs)
@@ -666,8 +714,7 @@ class ZatsepinSokolskaya(PrimaryFlux):
             self.f_norm[402] = (9.5e3, 8.5e3, 0.74, 18.0, 2)
             self.f_norm[1206] = (6.75e3, 1.8e3, 30, 5.8, 7)
             self.f_norm[2814] = (5.5e3, 1.5e3, 110, 3.5, 12)
-            self.f_norm[5426] = (3.5e3, 1.2e3, 750, 2.4, 20)
-            self.m_p = 0.983
+            self.f_norm[5626] = (3.5e3, 1.2e3, 750, 2.4, 20)
         elif model == "default":
             self.name = "Zatsepin-Sokolskaya"
             self.sname = "ZS"
@@ -681,8 +728,7 @@ class ZatsepinSokolskaya(PrimaryFlux):
             self.f_norm[402] = (8.75e3, 8.5e3, 3.0, 18.0, 2)
             self.f_norm[1206] = (6.75e3, 1.8e3, 30, 5.8, 7)
             self.f_norm[2814] = (5.5e3, 1.5e3, 110, 3.5, 12)
-            self.f_norm[5426] = (3.5e3, 1.2e3, 750, 2.4, 20)
-            self.m_p = 0.983
+            self.f_norm[5626] = (3.5e3, 1.2e3, 750, 2.4, 20)
         else:
             raise Exception(
                 f"{self.__class__.__name__}():: Unknown model selection '{model}'."
@@ -711,12 +757,12 @@ class ZatsepinSokolskaya(PrimaryFlux):
         return 1.0 / Z * np.sqrt(E**2 + 2 * self.m_p * A * E)
 
     def f_mod(self, E, corsika_id):
-        Z = self.Z_A(corsika_id)[0]
-
-        P = (E**2 + 2 * self.m_p * E) / (
-            (E + Z * 0.511e-3 * 0.6) ** 2 + 2 * self.m_p * (E + Z * 0.511e-3 * 0.6)
-        )
-        return self.flux(E + Z * 0.511e-3 * 0.6, corsika_id) * P
+        """Force-field modulated flux at kinetic energy ``E`` of the nucleus."""
+        Z, A = self.Z_A(corsika_id)
+        M = A * self.m_p
+        E_is = E + Z * self.phi_mod
+        P = (E**2 + 2 * M * E) / (E_is**2 + 2 * M * E_is)
+        return self.flux(E_is, corsika_id) * P
 
     def dN_dR(self, R, corsika_id, gen):
         return (
@@ -744,13 +790,11 @@ class ZatsepinSokolskaya(PrimaryFlux):
     def _nucleus_flux(self, corsika_id, E):
         corsika_id = self._find_nearby_id(corsika_id)
         E = np.atleast_1d(np.asarray(E, dtype=float))
-        result = np.empty_like(E)
-        lo = E < 300
-        hi = ~lo
-        if np.any(lo):
-            result[lo] = self.f_mod(E[lo], corsika_id)
-        if np.any(hi):
-            result[hi] = self.flux(E[hi], corsika_id)
+        T = E - self.Z_A(corsika_id)[1] * self.m_p
+        result = np.zeros_like(E)
+        above = T > 0
+        if np.any(above):
+            result[above] = self.f_mod(T[above], corsika_id)
         return result
 
 
@@ -761,6 +805,14 @@ class GaisserHonda(PrimaryFlux):
     This model was tuned to lower energy baloon data. It fails to
     describe the flux at and above the knee. A safe range for using
     it is < 100 TeV/nucleon.
+
+    The fit phi(E_k) = K (E_k + b exp(-c sqrt(E_k)))^-alpha (Eq. 10 and
+    Table 2 of the paper, central values, He "high"; Honda et al., PRD 70,
+    043008 (2004), Eq. 1) gives the nuclei per GeV of kinetic energy per
+    nucleon E_k. The CNO (A = 14) and Mg-Si (A = 25) groups are represented by
+    14N (1407) and 25Mg (2512). crflux evaluates it
+    at E_k = E/A - :data:`NUCLEON_MASS_GEV` for the total energy E of the
+    nucleus and divides by A (dE_k/dE = 1/A).
     """
 
     def __init__(self, *args, **kwargs):
@@ -770,9 +822,9 @@ class GaisserHonda(PrimaryFlux):
         self.params = {}
         self.params[14] = (2.74, 14900, 2.15, 0.21)
         self.params[402] = (2.64, 600, 1.25, 0.14)
-        self.params[1206] = (2.60, 33.2, 0.97, 0.01)
-        self.params[2814] = (2.79 + 0.08, 34.2 - 6.0, 2.14, 0.01)
-        self.params[5426] = (2.68, 4.45, 3.07, 0.41)
+        self.params[1407] = (2.60, 33.2, 0.97, 0.01)  # CNO group, A = 14 (as 14N)
+        self.params[2512] = (2.79, 34.2, 2.14, 0.01)  # Mg-Si group, A = 25 (as 25Mg)
+        self.params[5626] = (2.68, 4.45, 3.07, 0.41)
         self.nucleus_ids = list(self.params.keys())
 
     def _nucleus_flux(self, corsika_id, E):
@@ -784,7 +836,13 @@ class GaisserHonda(PrimaryFlux):
         b = self.params[corsika_id][2]
         c = self.params[corsika_id][3]
 
-        return K / A * (E / A + b * np.exp(-c * np.sqrt(E / A))) ** -alpha
+        E = np.atleast_1d(np.asarray(E, dtype=float))
+        E_k = E / A - NUCLEON_MASS_GEV
+        flux = np.zeros_like(E)
+        above = E_k > 0
+        e_k = E_k[above]
+        flux[above] = K / A * (e_k + b * np.exp(-c * np.sqrt(e_k))) ** -alpha
+        return flux
 
 
 class Thunman(PrimaryFlux):
@@ -844,6 +902,18 @@ class SimplePowerlaw27(PrimaryFlux):
         return self.params[0] * E ** (self.params[1])
 
 
+def _gsf_options(version, time_interval, geomagnetic_cutoff, cutoff_width):
+    """Keyword arguments for the globalsplinefit model constructors."""
+    opts = {
+        "version": version,
+        "default_time_interval": time_interval,
+        "default_rigidity_cutoff": geomagnetic_cutoff,
+    }
+    if cutoff_width is not None:
+        opts["cutoff_width"] = cutoff_width
+    return opts
+
+
 class GlobalSplineFit(PrimaryFlux):
     """Global Spline Fit (GSF) model through the globalsplinefit package.
 
@@ -862,7 +932,11 @@ class GlobalSplineFit(PrimaryFlux):
         Solar Cycle 24 average.
     geomagnetic_cutoff : float, optional
         Rigidity cutoff in GV, applied by globalsplinefit per species in
-        rigidity (not the base-class E >= Z R_cut step).
+        true rigidity. ``None`` or 0 means no cutoff.
+    cutoff_width : float, optional
+        Width in GV of globalsplinefit's sigmoid cutoff transition; 0 gives a
+        sharp step at ``geomagnetic_cutoff``. ``None`` keeps the
+        globalsplinefit default (1 GV).
 
     Notes
     -----
@@ -872,15 +946,17 @@ class GlobalSplineFit(PrimaryFlux):
     ``GSFEnergy`` model for uncertainties, covariances and composition.
     """
 
-    def __init__(self, version="2026.1", time_interval=None, geomagnetic_cutoff=None):
+    def __init__(
+        self,
+        version="2026.1",
+        time_interval=None,
+        geomagnetic_cutoff=None,
+        cutoff_width=None,
+    ):
         super().__init__(geomagnetic_cutoff=geomagnetic_cutoff)
         from globalsplinefit import GSFEnergy, GSFEnergyPerNucleon
 
-        opts = {
-            "version": version,
-            "default_time_interval": time_interval,
-            "default_rigidity_cutoff": geomagnetic_cutoff,
-        }
+        opts = _gsf_options(version, time_interval, geomagnetic_cutoff, cutoff_width)
         self.gsf = GSFEnergy(**opts)
         self._gsf_nucleon = GSFEnergyPerNucleon(**opts)
         self._species = {self._corsika_id(*sid): sid for sid in self.gsf.species}
@@ -895,6 +971,7 @@ class GlobalSplineFit(PrimaryFlux):
 
     def nucleus_flux(self, corsika_id, E):
         # the cutoff is already applied by globalsplinefit
+        corsika_id = LEGACY_IDS.get(corsika_id, corsika_id)
         return self._nucleus_flux(corsika_id, np.atleast_1d(np.asarray(E, dtype=float)))
 
     def _nucleus_flux(self, corsika_id, E):
@@ -924,7 +1001,16 @@ class GlobalSplineFitReduced(GlobalSplineFit, PrimaryFlux):
     The nucleon flux of :class:`GlobalSplineFit` with its uncertainty
     represented by relative-flux deviations ``theta`` at pivot energies;
     ``theta[i] = reduction.sigma[i]`` is a one-sigma variation. Nucleon fluxes
-    only: ``nucleus_ids`` is empty and ``nucleus_flux`` raises.
+    only: ``nucleus_ids`` is empty and ``nucleus_flux``, ``total_flux`` and
+    ``lnA`` raise ``NotImplementedError``.
+
+    A ``geomagnetic_cutoff`` is applied by globalsplinefit to every species
+    with its own (Z, A) before the reduction, so the central flux and the
+    pivot covariance are those of the cut flux (the mask does not depend on
+    the fit parameters). It is one global value per reduction: a cutoff that
+    varies with direction needs one reduction per value, or
+    :class:`GlobalSplineFit`. With a sharp step (``cutoff_width=0``) pivots
+    below the cutoff have zero flux and globalsplinefit rejects the reduction.
 
     Use for reference: Fedynitch et al., arXiv:2609.32649 (2026).
 
@@ -940,7 +1026,11 @@ class GlobalSplineFitReduced(GlobalSplineFit, PrimaryFlux):
     time_interval : tuple or str, optional
         Solar-modulation interval, or "LIS". None uses Solar Cycle 24.
     geomagnetic_cutoff : float, optional
-        Rigidity cutoff in GV, applied by globalsplinefit.
+        Rigidity cutoff in GV, applied by globalsplinefit. ``None`` or 0 means
+        no cutoff.
+    cutoff_width : float, optional
+        Width in GV of the sigmoid cutoff transition (0 = sharp); ``None``
+        keeps the globalsplinefit default (1 GV).
     basis : str
         Interpolation basis ("spline" or "hat") when building a reduction.
     """
@@ -953,6 +1043,7 @@ class GlobalSplineFitReduced(GlobalSplineFit, PrimaryFlux):
         reduction=None,
         time_interval=None,
         geomagnetic_cutoff=None,
+        cutoff_width=None,
         basis="spline",
     ):
         PrimaryFlux.__init__(self, geomagnetic_cutoff=geomagnetic_cutoff)
@@ -965,19 +1056,21 @@ class GlobalSplineFitReduced(GlobalSplineFit, PrimaryFlux):
         if reduction is None:
             reduction = ReducedGSF(
                 GSFEnergyPerNucleon(
-                    version=version,
-                    default_time_interval=time_interval,
-                    default_rigidity_cutoff=geomagnetic_cutoff,
+                    **_gsf_options(
+                        version, time_interval, geomagnetic_cutoff, cutoff_width
+                    )
                 ),
                 basis=basis,
             )
         elif (
             time_interval is not None
             or geomagnetic_cutoff is not None
+            or cutoff_width is not None
             or basis != "spline"
         ):
             raise ValueError(
-                "Configure time_interval/geomagnetic_cutoff/basis on the supplied reduction"
+                "Configure time_interval/geomagnetic_cutoff/cutoff_width/basis "
+                "on the supplied reduction"
             )
         if not isinstance(reduction, ReducedGSF) or reduction.per_group:
             raise ValueError("A total proton/neutron ReducedGSF is required")
@@ -1007,9 +1100,7 @@ class GlobalSplineFitReduced(GlobalSplineFit, PrimaryFlux):
         self.sname = f"GSF{reduction.model.version}"
 
     def _nucleus_flux(self, corsika_id, E):
-        raise NotImplementedError(
-            "ReducedGSF provides only proton/neutron nucleon fluxes"
-        )
+        raise NotImplementedError(_nucleon_only_message(self, "nucleus_flux"))
 
     def p_and_n_flux(self, E):
         energy = np.atleast_1d(np.asarray(E, dtype=float))
@@ -1037,6 +1128,13 @@ class GlobalSplineFitBeta(PrimaryFlux):
         instead. The class picks the most recent spline file in the package
         directory.
 
+    .. note::
+        The table holds nucleon fluxes without composition, so a rigidity
+        cutoff cannot be applied (it needs each nucleus' Z and A):
+        ``geomagnetic_cutoff`` other than ``None``/0 raises ``ValueError``,
+        and ``nucleus_flux``, ``total_flux`` and ``lnA`` raise
+        ``NotImplementedError``. ``GlobalSplineFit`` provides both.
+
     Use for reference: Dembinski et al., PoS ICRC2017 533
     https://inspirehep.net/literature/1639832
     """
@@ -1053,6 +1151,12 @@ class GlobalSplineFitBeta(PrimaryFlux):
             DeprecationWarning,
             stacklevel=2,
         )
+        if kwargs.get("geomagnetic_cutoff"):
+            raise ValueError(
+                "GlobalSplineFitBeta has no composition, so a rigidity cutoff "
+                "cannot be applied. Use crflux.models.GlobalSplineFit, the full "
+                "per-species GSF model, with geomagnetic_cutoff."
+            )
         super().__init__(**kwargs)
         import bz2
         import os
@@ -1108,13 +1212,6 @@ class GlobalSplineFitBeta(PrimaryFlux):
         p_flux = np.exp(self.p_flux_spl(np.log(E)))
         n_flux = np.exp(self.n_flux_spl(np.log(E)))
 
-        if self.geomagnetic_cutoff is not None:
-            # For nucleon fluxes, apply proton cutoff (Z=1, A=1)
-            E_cut = self.geomagnetic_cutoff
-            mask = E >= E_cut
-            p_flux = np.where(mask, p_flux, 0.0)
-            n_flux = np.where(mask, n_flux, 0.0)
-
         return p_frac, p_flux, n_flux
 
     def tot_nucleon_flux(self, E):
@@ -1129,6 +1226,5 @@ class GlobalSplineFitBeta(PrimaryFlux):
         return np.sum(self.p_and_n_flux(E)[1:], axis=0)
 
     def _nucleus_flux(self, corsika_id, E):
-        """Dummy function, since particle fluxes are not supported
-        in the spline interface version."""
-        return np.zeros_like(E)
+        """Not available: the table holds nucleon fluxes only."""
+        raise NotImplementedError(_nucleon_only_message(self, "nucleus_flux"))

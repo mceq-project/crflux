@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-`crflux` is a Python (>= 3.9) package providing parameterizations of the cosmic ray flux at the top of Earth's atmosphere. It is a dependency of [MCEq](https://github.com/afedynitch/MCEq). Provides numerical models of high-energy cosmic ray fluxes, all-particle to all-nucleon flux conversions, geomagnetic cutoff support, and convenience functions for atmospheric lepton flux calculations.
+`crflux` is a Python (>= 3.10) package providing parameterizations of the cosmic ray flux at the top of Earth's atmosphere. It is a dependency of [MCEq](https://github.com/afedynitch/MCEq). Provides numerical models of high-energy cosmic ray fluxes, all-particle to all-nucleon flux conversions, geomagnetic cutoff support, and convenience functions for atmospheric lepton flux calculations.
 
 ## Commands
 
@@ -27,13 +27,13 @@ The entire model library lives in `crflux/models.py`.
 - **Nucleus IDs**: Follow CORSIKA scheme. Protons = 14, composite nuclei = `100*A + Z`.
 - **All `_nucleus_flux` implementations must handle array inputs** (use `np.atleast_1d`). No `np.vectorize`.
 - **`GlobalSplineFitBeta`** (deprecated): bundled spline file (`crflux/GSF_spline_20171007.pkl.bz2`) = GSF 2017 nucleon flux at φ = 554 MV (Usoskin, July 1998). Nucleon fluxes only.
-- **Geomagnetic cutoff**: All models accept `geomagnetic_cutoff` (in GV) as a constructor kwarg. For a nucleus with charge Z, flux is zeroed below `E_cut = Z * R_cut` GeV.
+- **Geomagnetic cutoff**: All models accept `geomagnetic_cutoff` (in GV) as a constructor kwarg. It is a rigidity cut: a nucleus (Z, A) with total energy E is kept iff `sqrt(E**2 - M**2) >= Z * R_cut`, M = A * `NUCLEON_MASS_GEV` (`PrimaryFlux.cutoff_energy`). `None` or 0 = no cutoff. GSF models delegate the cutoff to globalsplinefit (`cutoff_width` sigmoid, default 1 GV).
 
 ## CI
 
 GitHub Actions (`.github/workflows/tests.yml`) runs on push/PR to `main`:
 - ruff lint and format checks
-- pytest across Python 3.9–3.13
+- pytest across Python 3.10–3.15
 
 Docs auto-deploy to gh-pages on push to `main` (`.github/workflows/docs.yml`).
 
