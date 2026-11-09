@@ -971,6 +971,7 @@ class GlobalSplineFit(PrimaryFlux):
 
     def nucleus_flux(self, corsika_id, E):
         # the cutoff is already applied by globalsplinefit
+        corsika_id = LEGACY_IDS.get(corsika_id, corsika_id)
         return self._nucleus_flux(corsika_id, np.atleast_1d(np.asarray(E, dtype=float)))
 
     def _nucleus_flux(self, corsika_id, E):

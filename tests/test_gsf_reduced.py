@@ -96,6 +96,17 @@ def test_full_model_versions_and_cutoff():
         GlobalSplineFitReduced(reduction=gsf.ReducedGSF(), geomagnetic_cutoff=5.0)
 
 
+@pytest.mark.parametrize("cutoff", [None, 7.0])
+def test_full_model_legacy_iron_id(cutoff):
+    from crflux.models import GlobalSplineFit
+
+    model = GlobalSplineFit(version="2026.1", geomagnetic_cutoff=cutoff)
+    energy = np.array([150.0, 1e3, 1e6])
+    iron = model.nucleus_flux(5626, energy)
+    assert np.all(iron[1:] > 0)
+    np.testing.assert_array_equal(model.nucleus_flux(5426, energy), iron)
+
+
 def test_zero_cutoff_is_no_cutoff():
     """0 GV must not trigger globalsplinefit's sigmoid (it cuts ~2 % of p)."""
     from crflux.models import GlobalSplineFit
