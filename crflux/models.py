@@ -798,6 +798,101 @@ class ZatsepinSokolskaya(PrimaryFlux):
         return result
 
 
+class LvEtAl2024(PrimaryFlux):
+    """X.-J. Lv et al., ApJ 979, 225 (2025), arXiv:2403.11832.
+
+    Five components fitted to AMS-02, DAMPE, LHAASO and Auger: Galactic Pop. I,
+    a local source and Pop. II (Eqs. 2-3, Table 3), and extragalactic LE and HE
+    (Eq. 4, Table 4). Each is a power law in the total energy E of the nucleus
+    with a rigidity cutoff exp(-E/(Z E_c)). The local source is suppressed by
+    exp(-L^2 / (4 D_xx tau)), D_xx = D_0 (R / 4 GV)^delta; the extragalactic
+    components by 1/cosh(Z E_l / E). Values as printed in the published
+    version, which differs from arXiv v1. The Z = 53 group is carried as 127I.
+
+    No solar modulation or low-energy curvature: use above ~100 GeV for the
+    all-particle flux (~30 GeV for p and He).
+    """
+
+    #: Local source (Eq. 2): distance L (pc), age tau (yr), D_0 (cm^2/s), delta.
+    ls_L_pc, ls_tau_yr, ls_D0, ls_delta = 500.0, 2e5, 5e27, 0.33
+    _pc_cm = 3.0856775814913673e18  # IAU 2015 Resolution B2
+    _yr_s = 3.15576e7  # Julian year
+
+    #: (phi_0 [m^-2 s^-1 sr^-1 GeV^-1], gamma) per component (Tables 3-4).
+    params = {
+        "pop1": {
+            14: (5.4e-5, 2.88),
+            402: (5.7e-5, 2.75),
+            1206: (1.3e-5, 2.75),
+            1608: (2.4e-5, 2.75),
+            2010: (5.2e-6, 2.75),
+            2412: (8.6e-6, 2.75),
+            2814: (9.9e-6, 2.75),
+            5626: (2.8e-5, 2.75),
+        },
+        "ls": {
+            14: (2.0e-4, 2.77),
+            402: (1.5e-4, 2.45),
+            1206: (3.2e-5, 2.45),
+            1608: (4.5e-5, 2.45),
+            2010: (1.5e-5, 2.45),
+            2412: (1.7e-5, 2.45),
+            2814: (2.0e-5, 2.45),
+            5626: (2.5e-5, 2.45),
+        },
+        "pop2": {
+            14: (2.5e-5, 2.42),
+            402: (1.3e-5, 2.40),
+            1206: (1.0e-6, 2.40),
+            1608: (1.6e-6, 2.40),
+            2010: (5.8e-7, 2.40),
+            2412: (7.3e-7, 2.40),
+            2814: (7.9e-7, 2.40),
+            5626: (1.7e-6, 2.38),
+            12753: (1.5e-8, 2.10),
+        },
+        "xg_le": {14: (8.0e-19, 2.67), 402: (8.5e-19, 2.67)},
+        "xg_he": {402: (3.1e-20, 2.0), 1407: (1.7e-20, 2.0)},
+    }
+    #: Pivot energy, E_c and E_l (GeV, GV) per component.
+    pivot = {"pop1": 1e3, "ls": 1e3, "pop2": 1e3, "xg_le": 1e8, "xg_he": 1e8}
+    e_c = {"pop1": 3e4, "ls": 3.6e4, "pop2": 4.8e6, "xg_le": 1e9, "xg_he": 4e9}
+    e_l = {"xg_le": 1.9e7, "xg_he": 1.5e9}
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(geomagnetic_cutoff=kwargs.pop("geomagnetic_cutoff", None))
+        self.name = "Lv et al. (2024)"
+        self.sname = "Lv24"
+        self.nucleus_ids = sorted(
+            {cid for comp in self.params.values() for cid in comp}
+        )
+
+    def component_flux(self, component, corsika_id, E):
+        """Flux of one component (keys of :attr:`params`) at total energy E (GeV)."""
+        E = np.atleast_1d(np.asarray(E, dtype=float))
+        flux = np.zeros_like(E)
+        if corsika_id not in self.params[component]:
+            return flux
+        Z, A = self.Z_A(corsika_id)
+        phi0, gamma = self.params[component][corsika_id]
+        above = E > A * NUCLEON_MASS_GEV
+        e = E[above]
+        f = phi0 * (e / self.pivot[component]) ** -gamma
+        f *= np.exp(-e / (Z * self.e_c[component]))
+        if component == "ls":
+            R = np.sqrt(e**2 - (A * NUCLEON_MASS_GEV) ** 2) / Z
+            D = self.ls_D0 * (R / 4.0) ** self.ls_delta
+            L = self.ls_L_pc * self._pc_cm
+            f *= np.exp(-(L**2) / (4.0 * D * self.ls_tau_yr * self._yr_s))
+        elif component in self.e_l:
+            f /= np.cosh(np.minimum(Z * self.e_l[component] / e, 700.0))
+        flux[above] = f
+        return flux
+
+    def _nucleus_flux(self, corsika_id, E):
+        return sum(self.component_flux(c, corsika_id, E) for c in self.params)
+
+
 class GaisserHonda(PrimaryFlux):
     """5 mass group single power-law model from T.K. Gaisser and M. Honda,
     Annual Review of Nuclear and Particle Science 52, 153 (2002)

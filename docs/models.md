@@ -40,6 +40,7 @@ $\langle\ln A\rangle$ as a function of energy per particle. Higher values indica
 | `CombinedGHandHG` | Fedynitch et al., PRD 86, 114024 (2012) | Full range | GH at low E, HG at high E |
 | `PolyGonato` | Hoerandel, Astropart. Phys. 19, 193 (2003) | Full range | 11 mass groups |
 | `ZatsepinSokolskaya` | Zatsepin & Sokolskaya, A&A 458, 1 (2006) | < 1-10 PeV | Variants: `default`, `pamela`; fit in kinetic energy per nucleus, force-field modulation Φ = 600 MV |
+| `LvEtAl2024` | Lv et al., ApJ 979, 225 (2025) | 100 GeV - $10^{11}$ GeV | Pop. I, local source, Pop. II, extragalactic LE/HE; published Tables 3-4 as printed. The paper's figures above $10^8$ GeV do not follow the printed Eq. 4 (all-particle 2-4 %, ⟨lnA⟩ up to 0.2 near $10^{10}$ GeV) |
 | `GaisserHonda` | Gaisser & Honda, ARNPS 52, 153 (2002) | < 100 TeV | Tuned to balloon data; fit in kinetic energy per nucleon; Table 2 central values, CNO as 1407 (A = 14), Mg-Si as 2512 (A = 25) |
 | `Thunman` | Thunman et al., Astropart. Phys. 5, 309 (1996) | Full range | Proton-only broken power law |
 | `SimplePowerlaw27` | Based on Thunman | Below knee | Proton-only $E^{-2.7}$ |
