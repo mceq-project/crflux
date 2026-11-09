@@ -318,6 +318,19 @@ class TestKineticEnergyModels:
             np.testing.assert_allclose(mod.nucleus_flux(cid, E), phi / A, rtol=1e-12)
         assert mod.nucleus_flux(14, 0.9)[0] == 0.0  # below the rest mass
 
+    def test_gaisser_honda_is_table_2(self):
+        """Central values of GH 2002 Table 2 (He "high"); CNO at A = 14, Mg-Si at A = 25."""
+        assert mods.GaisserHonda().params == {
+            14: (2.74, 14900, 2.15, 0.21),
+            402: (2.64, 600, 1.25, 0.14),
+            1407: (2.60, 33.2, 0.97, 0.01),
+            2512: (2.79, 34.2, 2.14, 0.01),
+            5626: (2.68, 4.45, 3.07, 0.41),
+        }
+        # cH3a/cH4a (PRD 86, 114024) keep GH on the HG groups
+        legacy = mods.CombinedGHandHG("H3a").leModel
+        assert sorted(legacy.nucleus_ids) == [14, 402, 1206, 2814, 5626]
+
     @pytest.mark.parametrize("model", ["pamela", "default"])
     def test_zatsepin_sokolskaya_kinetic_energy_and_modulation(self, model):
         mod = mods.ZatsepinSokolskaya(model)

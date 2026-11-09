@@ -633,6 +633,13 @@ class CombinedGHandHG(PrimaryFlux):
         self.sname = "c" + model
         self.params = {}
         self.leModel = GaisserHonda(**kwargs)
+        # PRD 86, 114024 ran GH on the HG groups: CNO as 1206 and Mg-Si as 2814,
+        # the latter with alpha + 1 sigma and K - 1 sigma
+        gh = self.leModel.params
+        gh[1206] = gh.pop(1407)
+        del gh[2512]
+        gh[2814] = (2.79 + 0.08, 34.2 - 6.0, 2.14, 0.01)
+        self.leModel.nucleus_ids = list(gh)
         self.heModel = HillasGaisser2012(model, **kwargs)
         self.heCutOff = 1e5
         cid_list = [14, 402, 1206, 2814, 5626]
@@ -800,8 +807,10 @@ class GaisserHonda(PrimaryFlux):
     it is < 100 TeV/nucleon.
 
     The fit phi(E_k) = K (E_k + b exp(-c sqrt(E_k)))^-alpha (Eq. 10 and
-    Table 2 of the paper; Honda et al., PRD 70, 043008 (2004), Eq. 1) gives
-    the nuclei per GeV of kinetic energy per nucleon E_k. crflux evaluates it
+    Table 2 of the paper, central values, He "high"; Honda et al., PRD 70,
+    043008 (2004), Eq. 1) gives the nuclei per GeV of kinetic energy per
+    nucleon E_k. The CNO (A = 14) and Mg-Si (A = 25) groups are represented by
+    14N (1407) and 25Mg (2512). crflux evaluates it
     at E_k = E/A - :data:`NUCLEON_MASS_GEV` for the total energy E of the
     nucleus and divides by A (dE_k/dE = 1/A).
     """
@@ -813,8 +822,8 @@ class GaisserHonda(PrimaryFlux):
         self.params = {}
         self.params[14] = (2.74, 14900, 2.15, 0.21)
         self.params[402] = (2.64, 600, 1.25, 0.14)
-        self.params[1206] = (2.60, 33.2, 0.97, 0.01)
-        self.params[2814] = (2.79 + 0.08, 34.2 - 6.0, 2.14, 0.01)
+        self.params[1407] = (2.60, 33.2, 0.97, 0.01)  # CNO group, A = 14 (as 14N)
+        self.params[2512] = (2.79, 34.2, 2.14, 0.01)  # Mg-Si group, A = 25 (as 25Mg)
         self.params[5626] = (2.68, 4.45, 3.07, 0.41)
         self.nucleus_ids = list(self.params.keys())
 
