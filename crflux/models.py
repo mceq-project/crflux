@@ -117,13 +117,16 @@ class PrimaryFlux(metaclass=ABCMeta):
         """
         E = np.atleast_1d(np.asarray(E, dtype=float))
         corsika_id = LEGACY_IDS.get(corsika_id, corsika_id)
-        flux = self._nucleus_flux(corsika_id, E)
-        if self.geomagnetic_cutoff:
-            Z, A = self.Z_A(corsika_id)
-            flux = np.where(
-                E >= self.cutoff_energy(Z, A, self.geomagnetic_cutoff), flux, 0.0
-            )
-        return flux
+        return self._apply_cutoff(corsika_id, E, self._nucleus_flux(corsika_id, E))
+
+    def _apply_cutoff(self, corsika_id, E, flux):
+        """Zero ``flux`` below the geomagnetic rigidity cutoff, if one is set."""
+        if not self.geomagnetic_cutoff:
+            return flux
+        Z, A = self.Z_A(corsika_id)
+        return np.where(
+            E >= self.cutoff_energy(Z, A, self.geomagnetic_cutoff), flux, 0.0
+        )
 
     @staticmethod
     def cutoff_energy(Z, A, rigidity):
@@ -868,8 +871,15 @@ class LvEtAl2024(PrimaryFlux):
         )
 
     def component_flux(self, component, corsika_id, E):
-        """Flux of one component (keys of :attr:`params`) at total energy E (GeV)."""
+        """Flux of one component (keys of :attr:`params`) at total energy E (GeV),
+        with the geomagnetic cutoff applied as in :meth:`nucleus_flux`."""
         E = np.atleast_1d(np.asarray(E, dtype=float))
+        corsika_id = LEGACY_IDS.get(corsika_id, corsika_id)
+        flux = self._component_flux(component, corsika_id, E)
+        return self._apply_cutoff(corsika_id, E, flux)
+
+    def _component_flux(self, component, corsika_id, E):
+        """Component flux without legacy-ID mapping or cutoff."""
         flux = np.zeros_like(E)
         if corsika_id not in self.params[component]:
             return flux
@@ -890,7 +900,7 @@ class LvEtAl2024(PrimaryFlux):
         return flux
 
     def _nucleus_flux(self, corsika_id, E):
-        return sum(self.component_flux(c, corsika_id, E) for c in self.params)
+        return sum(self._component_flux(c, corsika_id, E) for c in self.params)
 
 
 class GaisserHonda(PrimaryFlux):

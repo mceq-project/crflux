@@ -90,3 +90,16 @@ def test_below_rest_mass_is_zero(lv):
     assert (
         lv.nucleus_flux(12753, 100.0)[0] == 0.0 and lv.nucleus_flux(12753, 200.0)[0] > 0
     )
+
+
+def test_component_flux_legacy_id_and_cutoff():
+    E = np.array([100.0, 300.0, 1e3, 1e5])
+    lv = mods.LvEtAl2024()
+    np.testing.assert_array_equal(
+        lv.component_flux("pop2", 5426, E), lv.component_flux("pop2", 5626, E)
+    )
+    cut = mods.LvEtAl2024(geomagnetic_cutoff=15.0)
+    total = sum(cut.component_flux(c, 5626, E) for c in cut.params)
+    np.testing.assert_allclose(cut.nucleus_flux(5626, E), total, rtol=1e-14)
+    assert cut.component_flux("pop2", 5626, 300.0)[0] == 0.0
+    assert cut.component_flux("pop2", 5626, 1e3)[0] > 0.0
