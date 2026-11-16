@@ -18,6 +18,7 @@ ALL_MODELS = [
     (mods.GaisserHonda, ()),
     (mods.Thunman, ()),
     (mods.SimplePowerlaw27, ()),
+    (mods.LvEtAl2024, ()),
 ]
 
 

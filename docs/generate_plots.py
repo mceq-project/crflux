@@ -30,6 +30,7 @@ PMODELS = [
     (mods.ZatsepinSokolskaya, "default", "ZS", "#17becf", "-"),
     (mods.ZatsepinSokolskaya, "pamela", "ZSP", "#17becf", "--"),
     (mods.GaisserHonda, None, "GH", "#7f7f7f", "-"),
+    (mods.LvEtAl2024, None, "Lv24", "#e377c2", "-"),
     (mods.GlobalSplineFitBeta, None, "GSF spl", "k", ":"),
 ]
 
